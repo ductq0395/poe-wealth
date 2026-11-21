@@ -18,6 +18,7 @@
   nav button.on { color:var(--text); border-color:var(--gold); }
   main { padding:20px 24px; max-width:1400px; }
   main.wide { max-width:none; }
+  button.btn.sm { padding:3px 9px; font-size:12px; white-space:nowrap; }
   .tf-wrap { display:grid; grid-template-columns:1fr; gap:16px; align-items:start; }
   .tf-wrap > .card { margin-bottom:0; min-width:0; }
   #tfFrame { width:100%; height:calc(100vh - 190px); min-height:600px; }
@@ -431,7 +432,7 @@ function renderTimeless() {
   $("tlTable").innerHTML = list.length ? `<tr><th></th><th>Jewel</th><th>Mod</th><th>Nguồn</th><th>Trạng thái</th><th class="num">Giá</th><th></th></tr>` +
     list.map(i => `<tr><td>${img(i.icon)}</td><td>${esc(i.name)}</td><td class="muted">${modText(i.extra.mods).map(esc).join("<br>")}</td>
       <td class="muted">${esc(label[i.source] || "")}</td><td><span class="pill">${esc(i.extra.timeless_status)}</span></td><td class="num">${fmt(i.total)}</td>
-      <td>${(() => { const k = (i.extra.timeless_key || "").split("|"); return k.length === 5 ? `<button class="btn" onclick="tfView('${esc(k[2])}', '${esc(k[3])}', ${+k[4]})">Xem trên cây</button>` : ""; })()}</td></tr>`).join("")
+      <td>${(() => { const k = (i.extra.timeless_key || "").split("|"); return k.length === 5 ? `<div style="display:flex;gap:6px"><button class="btn" onclick="tfView('${esc(k[2])}', '${esc(k[3])}', ${+k[4]})">Xem trên cây</button><button class="btn" onclick="tlTrade('${esc(k[2])}', '${esc(k[3])}', ${+k[4]})">Xem trên trade</button></div>` : ""; })()}</td></tr>`).join("")
     : `<tr><td class="muted">Chưa thấy timeless jewel nào trong snapshot gần nhất.</td></tr>`;
 }
 function drawChart() {
@@ -599,6 +600,21 @@ async function alSave() {
   Object.assign(CFG, body); await post("/api/config", body); await loadAlerts(); renderAlerts();
 }
 
+// ---------- trade links for timeless jewels ----------
+const TL_CONQ = { "Glorious Vanity": ["Xibaqua", "Zerphi", "Ahuana", "Doryani"], "Lethal Pride": ["Kaom", "Rakiata", "Kiloava", "Akoya"],
+  "Brutal Restraint": ["Asenath", "Nasima", "Balbala", "Deshret"], "Militant Faith": ["Avarius", "Dominus", "Maxarius", "Venarius"],
+  "Elegant Hubris": ["Cadiro", "Victario", "Chitus", "Caspiro"], "Heroic Tragedy": ["Vorana", "Uhtred", "Medved", "Olroth"] };
+// same query the price check uses: exact seed (+ conqueror, or any conqueror with "*"), instant buyout, cheapest first
+function tlTradeUrl(jewel, conq, seed) {
+  const conqs = conq === "*" ? (TL_CONQ[jewel] || []) : [conq];
+  const q = { query: { status: { option: "securable" }, name: jewel, type: "Timeless Jewel",
+      stats: [{ type: "count", value: { min: 1 }, filters: conqs.map(c => ({ id: `explicit.pseudo_timeless_jewel_${c.toLowerCase()}`, value: { min: seed, max: seed } })) }],
+      filters: { trade_filters: { filters: { sale_type: { option: "priced" } } } } },
+    sort: { price: "asc" } };
+  return `https://www.pathofexile.com/trade/search/${encodeURIComponent(CFG.league || "Standard")}?q=${encodeURIComponent(JSON.stringify(q))}`;
+}
+function tlTrade(jewel, conq, seed) { window.open(tlTradeUrl(jewel, conq, seed), "_blank"); }
+
 // ---------- timeless finder ----------
 const TF = { url: "https://vilsol.github.io/timeless-jewels/tree", jewels: null, timer: null };
 // jewel ids used by Vilsol's tree page (beta: if the tree does not pick it up, choose by hand)
@@ -646,7 +662,9 @@ async function tfResults() {
     rows.map(x => `<tr><td class="num"><b>${x.seed}</b></td><td><span class="pill">${esc(lab(x.status))}</span> <span class="muted" style="font-size:11px">${esc(x.detail || "")}</span></td>
       <td class="num">${x.price == null ? "–" : x.price > 0 ? fmt(x.price) : "0"}</td><td class="num muted">${x.listings || ""}</td>
       <td>${x.owned.length ? `<span class="pos">✔ ${esc(x.owned.join(", "))}</span>` : ""}</td>
-      <td><button class="btn" onclick="tfOpen('${esc(jewel)}', '${esc(conq === "*" ? TF.jewels[jewel][0] : conq)}', ${x.seed})">Xem trên cây</button></td></tr>`).join("");
+      <td><div style="display:flex;flex-direction:column;gap:4px">
+        <button class="btn sm" onclick="tlTrade('${esc(jewel)}', '${esc(conq)}', ${x.seed})">Xem trên trade</button>
+        <button class="btn sm" onclick="tfOpen('${esc(jewel)}', '${esc(conq === "*" ? TF.jewels[jewel][0] : conq)}', ${x.seed})">Xem trên cây</button></div></td></tr>`).join("");
   return r;
 }
 
