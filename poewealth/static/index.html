@@ -17,6 +17,16 @@
   nav button { background:none; border:none; color:var(--muted); padding:10px 14px; cursor:pointer; border-bottom:2px solid transparent; font-size:14px; }
   nav button.on { color:var(--text); border-color:var(--gold); }
   main { padding:20px 24px; max-width:1400px; }
+  main.wide { max-width:none; }
+  .tf-wrap { display:grid; grid-template-columns:1fr; gap:16px; align-items:start; }
+  .tf-wrap > .card { margin-bottom:0; min-width:0; }
+  #tfFrame { width:100%; height:calc(100vh - 190px); min-height:600px; }
+  @media (min-width:1900px) {
+    .tf-wrap { grid-template-columns:minmax(0,1fr) 600px; }
+    #tfSide { position:sticky; top:12px; max-height:calc(100vh - 24px); overflow:auto; }
+    #tfSide .tf-inputs { flex-direction:column; align-items:stretch !important; }
+    #tfSide .tf-inputs > div { min-width:0 !important; }
+  }
   section { display:none; } section.on { display:block; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
   .row { display:flex; gap:16px; flex-wrap:wrap; } .row > .card { flex:1; min-width:320px; }
@@ -175,6 +185,7 @@
   </section>
 
   <section id="finder">
+    <div class="tf-wrap">
     <div class="card">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <b style="font-size:16px">Timeless finder</b>
@@ -184,12 +195,12 @@
         <button class="btn" onclick="tfOpen()">Trang finder</button>
         <button class="btn" onclick="window.open($('tfFrame').src || TF.url, '_blank')">Mở tab mới</button>
       </div>
-      <iframe id="tfFrame" style="width:100%;height:76vh;border:1px solid var(--line);border-radius:8px;margin-top:10px;background:#000"></iframe>
+      <iframe id="tfFrame" style="border:1px solid var(--line);border-radius:8px;margin-top:10px;background:#000"></iframe>
     </div>
-    <div class="card">
+    <div class="card" id="tfSide">
       <b>Check giá instant buyout cho danh sách seed</b>
       <span class="muted">– cùng luật với tab Timeless: trung bình 5 listing rẻ nhất, làm tròn xuống, không có buyout = 0</span>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:flex-start">
+      <div class="tf-inputs" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:flex-start">
         <div><label style="margin-top:0">Jewel</label><select id="tfJewel" onchange="tfConqs()"></select></div>
         <div><label style="margin-top:0">Conqueror</label><select id="tfConq"></select></div>
         <div style="flex:1;min-width:300px"><label style="margin-top:0">Seed (cách nhau bởi dấu cách, phẩy hoặc xuống dòng; tối đa 200)</label>
@@ -198,6 +209,7 @@
       </div>
       <p id="tfState" class="muted" style="font-size:12px;margin:8px 0 0"></p>
       <table id="tfTable" style="margin-top:8px"></table>
+    </div>
     </div>
   </section>
 
@@ -365,6 +377,7 @@ const when = ts => new Date(ts * 1000).toLocaleString("vi-VN");
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("on"));
   b.classList.add("on"); $(b.dataset.s).classList.add("on");
+  document.querySelector("main").classList.toggle("wide", b.dataset.s === "finder");
   if (b.dataset.s === "farm") loadSessions();
   if (b.dataset.s === "patch") loadPatch();
   if (b.dataset.s === "regex") rxTab(RX.tab);
