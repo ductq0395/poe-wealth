@@ -66,6 +66,7 @@
   <button data-s="items">Item</button>
   <button data-s="alerts">Cảnh báo giá <span id="alBadge" class="pill" style="display:none;background:#5a2a2a;color:#f0c8c8"></span></button>
   <button data-s="timeless">Timeless</button>
+  <button data-s="finder">Timeless finder <span class="pill" style="font-size:10px">beta</span></button>
   <button data-s="farm">Phiên farm</button>
   <button data-s="flip">Flip <span class="pill" style="font-size:10px">beta</span></button>
   <button data-s="regex">Regex</button>
@@ -170,6 +171,33 @@
         Trade API giới hạn chặt nên jewel được check dần ở nền, giá nhớ 6 giờ.</p>
       <div style="display:flex;gap:10px;align-items:center"><button class="btn" onclick="recheckTimeless()">Check lại tất cả</button><span id="tlState" class="muted"></span></div>
       <table id="tlTable" style="margin-top:10px"></table>
+    </div>
+  </section>
+
+  <section id="finder">
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:16px">Timeless finder</b>
+        <span class="muted">Cây passive + tìm seed của <b>Vilsol</b> (vilsol.github.io, chạy online, GPL-3.0). Tìm được seed ưng ý thì dán xuống dưới để check giá buyout.</span>
+        <div style="flex:1"></div>
+        <span id="tfNow" class="muted"></span>
+        <button class="btn" onclick="tfOpen()">Trang finder</button>
+        <button class="btn" onclick="window.open($('tfFrame').src || TF.url, '_blank')">Mở tab mới</button>
+      </div>
+      <iframe id="tfFrame" style="width:100%;height:76vh;border:1px solid var(--line);border-radius:8px;margin-top:10px;background:#000"></iframe>
+    </div>
+    <div class="card">
+      <b>Check giá instant buyout cho danh sách seed</b>
+      <span class="muted">– cùng luật với tab Timeless: trung bình 5 listing rẻ nhất, làm tròn xuống, không có buyout = 0</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:flex-start">
+        <div><label style="margin-top:0">Jewel</label><select id="tfJewel" onchange="tfConqs()"></select></div>
+        <div><label style="margin-top:0">Conqueror</label><select id="tfConq"></select></div>
+        <div style="flex:1;min-width:300px"><label style="margin-top:0">Seed (cách nhau bởi dấu cách, phẩy hoặc xuống dòng; tối đa 200)</label>
+          <textarea id="tfSeeds" rows="3" style="width:100%;background:#111217;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit" placeholder="13095 15802 13389 13851"></textarea></div>
+        <div style="align-self:flex-end;display:flex;gap:8px"><button class="btn gold" onclick="tfCheck()">Check giá</button><button class="btn" onclick="tfResults()">Làm mới</button></div>
+      </div>
+      <p id="tfState" class="muted" style="font-size:12px;margin:8px 0 0"></p>
+      <table id="tfTable" style="margin-top:8px"></table>
     </div>
   </section>
 
@@ -342,6 +370,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.s === "regex") rxTab(RX.tab);
   if (b.dataset.s === "alerts") loadAlerts().then(renderAlerts);
   if (b.dataset.s === "flip") flLoad();
+  if (b.dataset.s === "finder") tfLoad();
 });
 
 // ---------- data ----------
@@ -386,9 +415,10 @@ const modText = mods => (mods || []).flatMap(m => String(typeof m === "string" ?
 function renderTimeless() {
   const label = Object.fromEntries(LATEST.sources.map(s => [s.source, s.label]));
   const list = LATEST.items.filter(i => i.category === "timeless");
-  $("tlTable").innerHTML = list.length ? `<tr><th></th><th>Jewel</th><th>Mod</th><th>Nguồn</th><th>Trạng thái</th><th class="num">Giá</th></tr>` +
+  $("tlTable").innerHTML = list.length ? `<tr><th></th><th>Jewel</th><th>Mod</th><th>Nguồn</th><th>Trạng thái</th><th class="num">Giá</th><th></th></tr>` +
     list.map(i => `<tr><td>${img(i.icon)}</td><td>${esc(i.name)}</td><td class="muted">${modText(i.extra.mods).map(esc).join("<br>")}</td>
-      <td class="muted">${esc(label[i.source] || "")}</td><td><span class="pill">${esc(i.extra.timeless_status)}</span></td><td class="num">${fmt(i.total)}</td></tr>`).join("")
+      <td class="muted">${esc(label[i.source] || "")}</td><td><span class="pill">${esc(i.extra.timeless_status)}</span></td><td class="num">${fmt(i.total)}</td>
+      <td>${(() => { const k = (i.extra.timeless_key || "").split("|"); return k.length === 5 ? `<button class="btn" onclick="tfView('${esc(k[2])}', '${esc(k[3])}', ${+k[4]})">Xem trên cây</button>` : ""; })()}</td></tr>`).join("")
     : `<tr><td class="muted">Chưa thấy timeless jewel nào trong snapshot gần nhất.</td></tr>`;
 }
 function drawChart() {
@@ -554,6 +584,57 @@ function renderAlerts() {
 async function alSave() {
   const body = { alert_pct: +$("alPct").value || 20, alert_hours: +$("alHours").value, alert_min_total: +$("alMin").value || 0, alert_notify: $("alNotify").checked };
   Object.assign(CFG, body); await post("/api/config", body); await loadAlerts(); renderAlerts();
+}
+
+// ---------- timeless finder ----------
+const TF = { url: "https://vilsol.github.io/timeless-jewels/tree", jewels: null, timer: null };
+// jewel ids used by Vilsol's tree page (beta: if the tree does not pick it up, choose by hand)
+const TF_JEWEL_ID = { "Glorious Vanity": 1, "Lethal Pride": 2, "Brutal Restraint": 3, "Militant Faith": 4, "Elegant Hubris": 5, "Heroic Tragedy": 6 };
+async function tfLoad() {
+  if (!TF.jewels) {
+    const info = await api("/api/finder/info"); TF.url = info.url; TF.jewels = info.jewels;
+    $("tfJewel").innerHTML = Object.keys(TF.jewels).map(j => `<option>${j}</option>`).join("");
+    tfConqs();
+  }
+  if (!$("tfFrame").src) tfOpen();
+}
+function tfConqs() {
+  const j = $("tfJewel").value;
+  $("tfConq").innerHTML = `<option value="*">Bất kỳ (chỉ theo seed)</option>` + TF.jewels[j].map(c => `<option>${c}</option>`).join("");
+}
+function tfOpen(jewel, conq, seed) {
+  let u = TF.url;
+  if (jewel) u += `?jewel=${TF_JEWEL_ID[jewel] || ""}&conqueror=${encodeURIComponent(conq)}&seed=${seed}&mode=seed`;
+  $("tfFrame").src = u;
+  $("tfNow").textContent = jewel ? `Đang xem: ${jewel} · ${conq} · ${seed}` : "";
+}
+function tfView(jewel, conq, seed) {   // from other tabs
+  document.querySelector('nav button[data-s=finder]').click();
+  setTimeout(() => tfOpen(jewel, conq, seed), 50);
+}
+const tfSeedList = () => $("tfSeeds").value.split(/[^0-9]+/).filter(Boolean).map(Number);
+async function tfCheck() {
+  const seeds = tfSeedList(); if (!seeds.length) return alert("Chưa nhập seed");
+  try { await post("/api/finder/check", { jewel: $("tfJewel").value, conqueror: $("tfConq").value, seeds }); }
+  catch (e) { return alert(e.message); }
+  tfResults();
+  clearInterval(TF.timer);
+  TF.timer = setInterval(async () => { const r = await tfResults(); if (r && !r.timeless.pending) clearInterval(TF.timer); }, 3000);
+}
+async function tfResults() {
+  const seeds = tfSeedList(); if (!seeds.length) return null;
+  const jewel = $("tfJewel").value, conq = $("tfConq").value;
+  const r = await api("/api/finder/results", { method: "POST", body: JSON.stringify({ jewel, conqueror: conq, seeds }) });
+  const tl = r.timeless;
+  $("tfState").textContent = tl.pending ? `Đang check trade… còn ${tl.pending} (≈${Math.ceil(tl.pending * 7 / 60)} phút) – ${tl.status}` : "Xong hoặc đang chờ bấm Check giá.";
+  const rows = [...r.rows].sort((a, b) => (a.price ?? 1e12) - (b.price ?? 1e12) || a.seed - b.seed);
+  const lab = st => st === "buyout" ? "có buyout" : st === "none" ? "không có buyout" : st === "error" ? "lỗi, thử lại sau" : st;
+  $("tfTable").innerHTML = `<tr><th class="num">Seed</th><th>Trạng thái</th><th class="num">Giá</th><th class="num">Số listing</th><th>Đang có trong stash</th><th></th></tr>` +
+    rows.map(x => `<tr><td class="num"><b>${x.seed}</b></td><td><span class="pill">${esc(lab(x.status))}</span> <span class="muted" style="font-size:11px">${esc(x.detail || "")}</span></td>
+      <td class="num">${x.price == null ? "–" : x.price > 0 ? fmt(x.price) : "0"}</td><td class="num muted">${x.listings || ""}</td>
+      <td>${x.owned.length ? `<span class="pos">✔ ${esc(x.owned.join(", "))}</span>` : ""}</td>
+      <td><button class="btn" onclick="tfOpen('${esc(jewel)}', '${esc(conq === "*" ? TF.jewels[jewel][0] : conq)}', ${x.seed})">Xem trên cây</button></td></tr>`).join("");
+  return r;
 }
 
 // ---------- currency exchange flip (beta) ----------

@@ -85,3 +85,7 @@ Sau mỗi lần game update phải bấm Áp dụng lại. Bản gốc được 
 Cần thư viện `pyooz`: `pipx install -e --force ~/Downloads/poe-wealth` (hoặc `pipx inject poe-wealth pyooz`).
 
 Sửa file game vi phạm ToS của GGG, có rủi ro bị ban.
+
+## Timeless finder (beta)
+
+Tab **Timeless finder** nhúng cây passive và chức năng tìm seed của Vilsol (https://vilsol.github.io/timeless-jewels, GPL-3.0, chạy online). Phía dưới có ô dán danh sách seed để check giá instant buyout, theo cùng luật với tab Timeless. Seed nào bạn đã có trong stash sẽ được đánh dấu. Ở tab Timeless, mỗi jewel có nút **Xem trên cây**.

@@ -385,6 +385,64 @@ async def flip_scan():
     return {"ok": True}
 
 
+# ---------------- timeless finder (Vilsol tree + buyout price per seed) ----------------
+VILSOL_URL = "https://vilsol.github.io/timeless-jewels/tree"
+
+
+@app.get("/api/finder/info")
+async def finder_info():
+    from .timeless import JEWEL_CONQUERORS
+    return {"url": VILSOL_URL, "jewels": JEWEL_CONQUERORS}
+
+
+def _owned_keys() -> list[dict]:
+    """Timeless jewels in the newest snapshot: [{jewel, conq, seed, source}]"""
+    db = state["db"]
+    s = db.latest_snapshot(cfg().league)
+    if not s:
+        return []
+    out = []
+    labels = {r["source"]: r["label"] for r in db.q("SELECT source, label FROM snapshot_sources WHERE snapshot_id=?", (s["id"],))}
+    for r in db.q("SELECT source, extra, qty FROM snapshot_items WHERE snapshot_id=? AND category='timeless'", (s["id"],)):
+        k = (json.loads(r["extra"] or "{}").get("timeless_key") or "").split("|")
+        if len(k) == 5:          # rule|league|jewel|conq|seed
+            out.append({"jewel": k[2], "conq": k[3], "seed": int(k[4]), "source": labels.get(r["source"], r["source"]), "qty": r["qty"]})
+    return out
+
+
+@app.post("/api/finder/check")
+async def finder_check(body: dict):
+    from .timeless import JEWEL_CONQUERORS
+    jewel, conq = body.get("jewel"), body.get("conqueror") or "*"
+    if jewel not in JEWEL_CONQUERORS or (conq != "*" and conq not in JEWEL_CONQUERORS[jewel]):
+        raise HTTPException(400, "Sai loại jewel / conqueror")
+    seeds = sorted({int(x) for x in body.get("seeds", []) if str(x).isdigit()})[:200]
+    if not seeds:
+        raise HTTPException(400, "Chưa có seed nào")
+    tp = state["timeless"]
+    for sd in seeds:
+        tp.enqueue_seed(cfg().league, jewel, conq, sd)
+    return {"queued": len(seeds)}
+
+
+@app.post("/api/finder/results")
+async def finder_results(body: dict):
+    from .timeless import cache_key
+    jewel, conq = body.get("jewel"), body.get("conqueror") or "*"
+    seeds = sorted({int(x) for x in body.get("seeds", []) if str(x).isdigit()})[:200]
+    tp, league = state["timeless"], cfg().league
+    owned = _owned_keys()
+    rows = []
+    for sd in seeds:
+        key = cache_key(league, jewel, conq, sd)
+        c = tp.cached(key)
+        mine = [o for o in owned if o["jewel"] == jewel and o["seed"] == sd and (conq == "*" or o["conq"] == conq)]
+        rows.append({"seed": sd, "status": ("pending" if key in tp.pending else "chưa check") if not c else c["mode"],
+                     "price": c["price_chaos"] if c else None, "listings": c["listings"] if c else 0,
+                     "detail": c["detail"] if c else "", "owned": [f"{o['conq']} ({o['source']})" for o in mine]})
+    return {"rows": rows, "timeless": tp.state(), "divine": state["prices"].divine}
+
+
 # ---------------- regex helpers ----------------
 @app.get("/api/regex/mapmods")
 async def regex_mapmods():

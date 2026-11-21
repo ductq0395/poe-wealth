@@ -106,6 +106,19 @@ class TimelessPricer:
         if not self.task or self.task.done():
             self.task = asyncio.create_task(self._run())
 
+    def enqueue_seed(self, league: str, jewel: str, conq: str, seed: int) -> str:
+        """Queue a price check for a seed that is not in the stash (timeless finder)."""
+        key = cache_key(league, jewel, conq, seed)
+        if key not in self.pending and not self._cached(key):
+            self.pending.add(key)
+            self.queue.put_nowait((key, jewel, conq, seed))
+            if not self.task or self.task.done():
+                self.task = asyncio.create_task(self._run())
+        return key
+
+    def cached(self, key: str) -> dict | None:
+        return self._cached(key)
+
     def state(self) -> dict:
         return {"status": self.status, "pending": len(self.pending)}
 
@@ -150,7 +163,8 @@ class TimelessPricer:
     async def _price_one(self, client: PoeClient, jewel: str, conq: str, seed: int):
         """Instant-buyout listings for this exact seed + conqueror.
         Price = floor(average of the 5 cheapest, in chaos); no listing -> 0."""
-        res = await client.trade_search(self._query(jewel, [conq], seed))
+        conqs = JEWEL_CONQUERORS[jewel] if conq == "*" else [conq]
+        res = await client.trade_search(self._query(jewel, conqs, seed))
         ids = res.get("result", [])
         if not ids:
             return 0.0, 0, "none", "không có ai bán instant buyout"
