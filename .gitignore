@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+*.sqlite3
+config.json
+flip_cache.json
+*.log
