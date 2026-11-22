@@ -38,9 +38,9 @@ def new_client() -> PoeClient:
     return PoeClient(cfg(), state["limiter"])
 
 
-async def _snapshot_then(after=None):
+async def _snapshot_then(after=None, only=None):
     try:
-        sid = await take_snapshot(cfg(), state["db"], state["prices"], state["timeless"], state["limiter"])
+        sid = await take_snapshot(cfg(), state["db"], state["prices"], state["timeless"], state["limiter"], only)
         if after:
             after(sid)
     except Exception:  # noqa: BLE001 - error is in progress["error"]
@@ -59,6 +59,38 @@ def run_bg(coro) -> None:
     t = asyncio.create_task(coro)
     state.setdefault("tasks", set()).add(t)
     t.add_done_callback(state["tasks"].discard)
+
+
+def _my_chars() -> set[str]:
+    db = state["db"]
+    s = db.latest_snapshot(cfg().league) if cfg().league else None
+    names = set(cfg().characters or [])
+    if s:
+        names |= {r["source"][5:] for r in db.q("SELECT source FROM snapshot_sources WHERE snapshot_id=? AND source LIKE 'char:%'", (s["id"],))}
+    return names
+
+
+async def scan_log() -> dict:
+    from .gamelog import find_log
+    lr = state["log"]
+    path = find_log(cfg().client_log_path, cfg().patch_game_path)
+    if not path:
+        lr.status = "Không tìm thấy Client.txt – nhập đường dẫn trong Cài đặt"
+        return {"found": False}
+    try:
+        st = await asyncio.to_thread(lr.scan, path, _my_chars())
+        lr.status = ""
+        return {"found": True, **st}
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("poewealth").exception("đọc Client.txt lỗi")
+        lr.status = f"Lỗi đọc log: {e}"
+        return {"found": True, "error": str(e)}
+
+
+async def log_loop():
+    while True:
+        await scan_log()
+        await asyncio.sleep(20)
 
 
 async def auto_loop():
@@ -103,12 +135,16 @@ async def lifespan(app: FastAPI):
     state["notifier"] = alerts.Notifier()
     state["flip"] = flip.FlipScanner(state["limiter"])
     state["timeless"] = tp
+    from .gamelog import LogReader
+    state["log"] = LogReader(state["db"])
     mp = MercPricer(state["prices"])
     mp.client_factory = new_client
     state["merc"] = mp
     loop_task = asyncio.create_task(auto_loop())
+    log_task = asyncio.create_task(log_loop())
     yield
     loop_task.cancel()
+    log_task.cancel()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -195,6 +231,20 @@ async def snapshot():
     return {"ok": True}
 
 
+@app.post("/api/snapshot/source")
+async def snapshot_source(body: dict):
+    """Re-read one stash tab ("tab:<id>") or character ("char:<name>"); other sources are copied."""
+    src = str(body.get("source") or "")
+    if not (src.startswith("tab:") or src.startswith("char:")):
+        raise HTTPException(400, "source phải là tab:<id> hoặc char:<tên>")
+    if progress["running"]:
+        raise HTTPException(409, "Đang chạy snapshot")
+    if not state["db"].latest_snapshot(cfg().league):
+        raise HTTPException(400, "Chưa có snapshot nào – bấm Snapshot đầy đủ trước")
+    run_bg(_snapshot_then(only=src))
+    return {"ok": True}
+
+
 @app.get("/api/status")
 async def status():
     return {"progress": progress, "timeless": state["timeless"].state(), "code_dir": str(Path(__file__).parent),
@@ -249,7 +299,7 @@ def _snapshot_detail(sid: int) -> dict:
     if not snap:
         raise HTTPException(404, "Không có snapshot")
     sources = db.q("SELECT source,label,value,item_count FROM snapshot_sources WHERE snapshot_id=? ORDER BY value DESC", (sid,))
-    items = db.q("SELECT source,name,category,qty,unit,total,icon,extra FROM snapshot_items WHERE snapshot_id=? ORDER BY total DESC", (sid,))
+    items = db.q("SELECT source,key,name,category,qty,unit,total,icon,extra FROM snapshot_items WHERE snapshot_id=? ORDER BY total DESC", (sid,))
     for i in items:
         i["extra"] = json.loads(i["extra"] or "{}")
     return {"snapshot": snap, "sources": sources, "items": items}
@@ -289,10 +339,11 @@ async def session_start(body: dict | None = None):
     if progress["running"]:
         raise HTTPException(409, "Đang chạy snapshot")
     name = (body or {}).get("name") or time.strftime("Phiên %d/%m %H:%M")
+    tag = str((body or {}).get("tag") or "").strip()[:40]
 
     def after(sid):
         with db.conn:
-            db.conn.execute("INSERT INTO sessions(name,start_snapshot,started) VALUES (?,?,?)", (name, sid, time.time()))
+            db.conn.execute("INSERT INTO sessions(name,start_snapshot,started,tag) VALUES (?,?,?,?)", (name, sid, time.time(), tag))
     run_bg(_snapshot_then(after))
     return {"ok": True}
 
@@ -320,6 +371,8 @@ async def sessions():
            FROM sessions s JOIN snapshots a ON a.id=s.start_snapshot
            LEFT JOIN snapshots b ON b.id=s.end_snapshot ORDER BY s.id DESC""")
     for r in rows:
+        end = r["ended"] or time.time()
+        r["maps"] = state["db"].one("SELECT COUNT(*) n FROM map_runs WHERE started>=? AND started<=?", (r["started"], end))["n"]
         r["costs"] = json.loads(r.get("costs") or "[]")
         r["cost"] = sum(float(c.get("qty") or 0) * float(c.get("unit") or 0) for c in r["costs"])
         if r["end_value"] is not None:
@@ -327,7 +380,16 @@ async def sessions():
             r["gross"] = r["end_value"] - r["start_value"]
             r["profit"] = r["gross"] - r["cost"]
             r["per_hour"] = r["profit"] / hours
+            r["hours"] = hours
+            r["per_map"] = r["profit"] / r["maps"] if r["maps"] else None
     return rows
+
+
+@app.post("/api/session/{sid}/tag")
+async def session_tag(sid: int, body: dict):
+    with state["db"].conn:
+        state["db"].conn.execute("UPDATE sessions SET tag=? WHERE id=?", (str(body.get("tag") or "").strip()[:40], sid))
+    return {"ok": True}
 
 
 @app.post("/api/session/{sid}/costs")
@@ -675,6 +737,81 @@ async def ch_item(body: dict):
         d["milestones"] = [int(x) for x in body["milestones"] if str(x).isdigit()]
     ch.save(_ch_path(), cfg().league, d)
     return await _ch_view(d)
+
+
+# ---------------- game log: map tracker + trades ----------------
+@app.get("/api/log/status")
+async def log_status():
+    from .gamelog import candidates, find_log
+    lr = state["log"]
+    return {"path": find_log(cfg().client_log_path, cfg().patch_game_path), "status": lr.status,
+            "last_scan": lr.last_scan, "tried": candidates(cfg().patch_game_path)}
+
+
+@app.post("/api/log/scan")
+async def log_scan():
+    return await scan_log()
+
+
+@app.get("/api/maps")
+async def maps_api(days: float = 1):
+    db = state["db"]
+    since = time.time() - days * 86400 if days > 0 else 0
+    runs = db.q("SELECT * FROM map_runs WHERE started>=? ORDER BY started DESC LIMIT 2000", (since,))
+    sess = db.q("SELECT id, name, tag, started, COALESCE(ended, ?) ended FROM sessions", (time.time(),))
+    for r in runs:
+        s = next((x for x in sess if x["started"] <= r["started"] <= x["ended"]), None)
+        r["session"] = f"{s['name']}" + (f" [{s['tag']}]" if s and s["tag"] else "") if s else ""
+    n = len(runs)
+    act = sum(r["active"] for r in runs)
+    span = (max((r["ended"] for r in runs), default=0) - min((r["started"] for r in runs), default=0)) if runs else 0
+    by_name: dict[str, dict] = {}
+    for r in runs:
+        b = by_name.setdefault(r["name"], {"name": r["name"], "n": 0, "active": 0.0, "deaths": 0})
+        b["n"] += 1; b["active"] += r["active"]; b["deaths"] += r["deaths"]
+    return {"runs": runs, "count": n, "active": act, "avg": act / n if n else 0, "deaths": sum(r["deaths"] for r in runs),
+            "per_hour": n / (span / 3600) if span > 600 else None, "by_name": sorted(by_name.values(), key=lambda x: -x["n"])[:30],
+            "status": state["log"].status, "last_scan": state["log"].last_scan}
+
+
+_CUR_ALIAS = {"chaos": "Chaos Orb", "divine": "Divine Orb", "exalted": "Exalted Orb", "exa": "Exalted Orb",
+              "alch": "Orb of Alchemy", "alt": "Orb of Alteration", "fusing": "Orb of Fusing", "chrome": "Chromatic Orb",
+              "mirror": "Mirror of Kalandra", "gcp": "Gemcutter's Prism", "vaal": "Vaal Orb", "regal": "Regal Orb"}
+
+
+@app.get("/api/trades")
+async def trades_api(days: float = 7):
+    db, p = state["db"], state["prices"]
+    since = time.time() - days * 86400 if days > 0 else 0
+    rows = db.q("SELECT * FROM trades WHERE ts>=? ORDER BY ts DESC LIMIT 3000", (since,))
+    for r in rows:
+        cur = _CUR_ALIAS.get((r["currency"] or "").lower(), r["currency"] or "")
+        rate = p.stack.get(cur)
+        r["chaos"] = (r["price"] or 0) * rate if rate and r["price"] else None
+    done_in = [r for r in rows if r["dir"] == "in" and r["status"] == "đã giao dịch"]
+    done_out = [r for r in rows if r["dir"] == "out" and r["status"] == "đã giao dịch"]
+    return {"rows": rows, "asked": sum(1 for r in rows if r["dir"] == "in"), "sold": len(done_in),
+            "income": sum(r["chaos"] or 0 for r in done_in), "bought": len(done_out),
+            "spent": sum(r["chaos"] or 0 for r in done_out), "status": state["log"].status}
+
+
+@app.get("/api/item/history")
+async def item_history(key: str, limit: int = 500):
+    db = state["db"]
+    rows = db.q("""SELECT s.id, s.ts, s.divine_rate, SUM(i.qty) qty, SUM(i.total) total
+                   FROM snapshot_items i JOIN snapshots s ON s.id = i.snapshot_id
+                   WHERE i.key=? AND s.league=? GROUP BY s.id ORDER BY s.id DESC LIMIT ?""", (key, cfg().league, limit))
+    rows.reverse()
+    for r in rows:
+        r["unit"] = r["total"] / r["qty"] if r["qty"] else 0
+    return rows
+
+
+@app.get("/api/topbar")
+async def topbar():
+    from .gamelog import filter_status
+    return {"filter": await asyncio.to_thread(filter_status, cfg().poe_docs_path), "warn_days": cfg().filter_warn_days,
+            "lab_url": "https://www.poelab.com/"}
 
 
 # ---------------- regex helpers ----------------

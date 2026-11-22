@@ -1,52 +1,29 @@
 # PoE Wealth (local)
 
-Bản tự chạy kiểu Wealthy Exile cho PoE 1. Mọi thứ chạy trên máy, không cần login PoE vào trang khác.
+Tool tự chạy trên máy cho Path of Exile 1: theo dõi tài sản kiểu Wealthy Exile, cộng thêm nhiều công cụ khác (timeless, mercenary, challenge, map tracker, trade log, gem/bài div, máy tính crafting…).
 
 - **POESESSID** lưu ở `~/.config/poe-wealth/config.json` (chmod 600), chỉ gửi tới `www.pathofexile.com`. Web UI không bao giờ nhận lại cookie.
 - **Giá** lấy từ poe.ninja (API công khai, không gửi cookie).
-- **Timeless jewel** check giá trên trade site theo seed + conqueror (Wealthy Exile không làm phần này).
 - Server chỉ nghe `127.0.0.1:8787`, có chặn DNS-rebinding/CSRF.
-- Dữ liệu: `~/.config/poe-wealth/wealth.sqlite3`.
+- Mọi dữ liệu nằm trong `~/.config/poe-wealth/` (không nằm trong repo).
 
-## Chạy (fish)
+## Cài và chạy (CachyOS / fish)
 
 ```fish
 sudo pacman -S --needed python-pipx
 pipx ensurepath            # thêm ~/.local/bin vào PATH, mở lại terminal
 pipx install -e ~/Downloads/poe-wealth
 poe-wealth
-# mở http://127.0.0.1:8787 trong Edge
+# mở http://127.0.0.1:8787
 ```
 
-`-e` (editable) giúp sửa code trong `~/Downloads/poe-wealth` có hiệu lực ngay. Chỉ cần tắt rồi chạy lại `poe-wealth`, không phải cài lại.
-Nếu sau này đổi dependency trong `pyproject.toml`: `pipx install -e --force ~/Downloads/poe-wealth`.
-Gỡ cài đặt: `pipx uninstall poe-wealth`. Dữ liệu trong `~/.config/poe-wealth` vẫn giữ nguyên.
+- `-e` (editable): sửa code trong `~/Downloads/poe-wealth` là có hiệu lực. Sửa file Python thì tắt rồi chạy lại (`pkill -f poe-wealth; poe-wealth`); chỉ sửa `static/index.html` thì Ctrl+Shift+R.
+- Đổi dependency trong `pyproject.toml`: `pipx install -e --force ~/Downloads/poe-wealth`.
+- Gỡ: `pipx uninstall poe-wealth` (dữ liệu trong `~/.config/poe-wealth` vẫn giữ).
+- Đổi port: `env POE_WEALTH_PORT=8790 poe-wealth`.
+- Windows: `gh repo clone poe-wealth`, cài Python + pipx, `pipx install -e .\poe-wealth`; cập nhật bằng `git pull`. Máy Windows dùng chung rate limit tài khoản với máy kia → để Auto snapshot = 0 ở một máy.
 
-Đổi port (fish): `env POE_WEALTH_PORT=8790 poe-wealth`.
-
-## Lần đầu
-
-1. Edge → pathofexile.com (đăng nhập) → F12 → Application → Cookies → copy `POESESSID`.
-2. Tab **Cài đặt**: dán POESESSID, account name **có #số** (xem ở góc trang profile), bấm “Lấy list” để chọn league → Lưu.
-3. “Tải danh sách tab” → tick các tab muốn tính. “Tải nhân vật” nếu chỉ muốn tính vài nhân vật.
-4. Bấm **Snapshot**. Lần đầu tải giá poe.ninja mất khoảng 10–20 giây; mỗi tab là 1 request, có rate limit theo header của GGG.
-
-## Tính năng
-
-- **Tổng quan**: net worth theo thời gian (div/chaos), chaos mỗi giờ, giá trị theo tab/nhân vật, top item.
-- **Item**: lọc theo nguồn, loại, tên, giá tối thiểu.
-- **Phiên farm**: bấm Bắt đầu/Dừng; lời và lời/giờ = snapshot cuối − đầu. Bấm vào một phiên để xem item tăng/giảm.
-- **Timeless**: từng jewel kèm seed/conqueror, trạng thái và giá. Search theo đúng conqueror; nếu không có listing thì search theo seed với mọi conqueror cùng loại. Giá = trung vị 5 listing online rẻ nhất (bỏ listing rẻ nhất). Cache 6 giờ, chạy dần ở nền vì trade search bị giới hạn khoảng 1 lần/6 giây.
-- **Auto snapshot**: đặt số phút trong Cài đặt (app phải đang chạy).
-
-## Giới hạn đã biết
-
-- Dùng API cũ `character-window` (giống các tool như Exilence/Wealthy Exile bản cookie). Map tab, Unique tab và folder có thể không trả item.
-- Giá rare chỉ tính theo base type khi ilvl ≥ 82 (giá base poe.ninja). Rare có mod tốt sẽ bị định giá thấp hơn thực tế.
-- Cluster jewel, beast và item không có trên poe.ninja = 0.
-- poe.ninja dùng API mới `poe.ninja/poe1/api/economy/{exchange|stash}` (API cũ `/api/data/...` đã trả 404). Nếu lại đổi, dòng trạng thái báo “poe.ninja lỗi …”: sửa `NINJA` và danh sách type trong `poewealth/pricing.py`.
-
-## Chạy nền khi khởi động (tuỳ chọn)
+### Chạy nền khi khởi động (tuỳ chọn)
 
 `~/.config/systemd/user/poe-wealth.service`:
 
@@ -67,46 +44,133 @@ systemctl --user daemon-reload
 systemctl --user enable --now poe-wealth
 ```
 
-## Patch game (minimap + màu dòng Eldritch altar)
+## Lần đầu
 
-Tab **Patch game**, port từ PoeRedux (https://github.com/Gineticus/PoeRedux):
+1. Trình duyệt → pathofexile.com (đăng nhập) → F12 → Application → Cookies → copy `POESESSID`.
+2. Tab **Cài đặt**: dán POESESSID, account name **có #số** (vd `ten#1234`), bấm "Lấy list" để chọn league → Lưu.
+3. "Tải danh sách tab" → tick các tab muốn tính. "Tải nhân vật" nếu chỉ muốn tính vài nhân vật.
+4. Bấm **Snapshot**. Lần đầu tải giá poe.ninja mất khoảng 10–20 giây; mỗi tab là 1 request, có rate limit theo header của GGG.
 
-- **Minimap**: hiện toàn bộ minimap ngay từ đầu (giống `poe_minimap.py`).
-- **Màu dòng Eldritch altar**: tô màu 14 dòng của trụ Eater of Worlds / Searing Exarch theo nhóm của PoeRedux. Dòng divine màu xanh lá, dòng duplicate màu xanh dương, dòng nguy hiểm màu đỏ. Đổi được nhóm và màu.
+## Thanh trên cùng
 
-Cách dùng:
+- **Net worth**, giá Divine, thời điểm snapshot gần nhất, nút **Snapshot** (chụp toàn bộ tab + nhân vật).
+- **Lab hôm nay**: link poelab.com.
+- **Loot filter ↗**: bấm để mở FilterBlade. Dòng dưới là tuổi filter đang dùng (file mới nhất trong `My Games/Path of Exile/OnlineFilters` hoặc `*.filter`), chuyển đỏ khi cũ hơn N ngày (Cài đặt, mặc định 3). Thư mục tự tìm trong prefix Proton; nhập tay trong Cài đặt nếu không thấy.
 
-1. Tắt game.
-2. Nhập đường dẫn `Content.ggpk` (bản standalone) hoặc `Bundles2/_.index.bin` (Steam/Epic).
-3. Bấm **Kiểm tra** rồi **Áp dụng**.
+## Các tab
 
-Sau mỗi lần game update phải bấm Áp dụng lại. Bản gốc được backup ở `~/.config/poe-wealth/game-backup/`; nút **Khôi phục bản gốc** trả lại tất cả. Nếu trước đó đã patch minimap bằng `poe_minimap.py`, app dùng luôn backup của script đó.
+### Tổng quan
+- Biểu đồ net worth theo thời gian (div/chaos), chaos/giờ.
+- Bảng **Theo tab / nhân vật** và **Top item**. Nút **⟳** ở mỗi dòng: làm mới riêng tab/nhân vật đó (2 request), các nguồn khác giữ số liệu lần trước.
+- **Phiên farm** (cột phải):
+  - Bắt đầu/Dừng đều tự chụp snapshot; lời ròng = snapshot cuối − đầu − chi phí.
+  - Gắn **nhãn chiến thuật** (Breach, Ritual…) khi bắt đầu hoặc bấm vào pill nhãn để sửa.
+  - **Chi phí** đầu vào (scarab, map, sextant…), đơn giá để trống = giá poe.ninja lúc lưu.
+  - Cột **Map** (số map chạy trong phiên, lấy từ Client.txt) và lời/map.
+  - Bấm một phiên đã dừng → item tăng/giảm trong phiên.
+  - Bảng **So sánh chiến thuật**: lời ròng/giờ và lời/map theo từng nhãn.
 
-Cần thư viện `pyooz`: `pipx install -e --force ~/Downloads/poe-wealth` (hoặc `pipx inject poe-wealth pyooz`).
+### Theo tab
+- Giống Wealthy Exile: biểu đồ Wealth (Total/Theo giờ), Breakdown, danh sách tab bật/tắt (bấm đúp = chỉ xem tab đó), so sánh với 1 giờ/6 giờ/24 giờ/7 ngày trước.
+- Bảng item sắp xếp được, tick chọn, **Copy danh sách đã chọn**.
+- **Build regex**: tạo regex tìm trong rương các item đang tick (chuỗi ngắn nhất ≥ 4 ký tự không trùng với món không tick, tự chia nhiều lần tìm nếu quá 250 ký tự).
+- Nút **⟳** ở từng tab: làm mới riêng tab đó.
 
-Sửa file game vi phạm ToS của GGG, có rủi ro bị ban.
+### Item
+- Lọc theo nguồn, loại, tên, giá tối thiểu.
+- Bấm một dòng → **biểu đồ** đơn giá và số lượng đang giữ qua các snapshot, kèm % thay đổi.
 
-## Timeless finder (beta)
+### Cảnh báo giá
+- Món trong rương đổi giá ≥ X% so với N giờ trước, giá trị đang giữ ≥ Y chaos. Thông báo desktop (`notify-send`) sau mỗi snapshot.
 
-Tab **Timeless finder** nhúng cây passive và chức năng tìm seed của Vilsol (https://vilsol.github.io/timeless-jewels, GPL-3.0, chạy online). Phía dưới có ô dán danh sách seed để check giá instant buyout, theo cùng luật với tab Timeless. Seed nào bạn đã có trong stash sẽ được đánh dấu. Ở tab Timeless, mỗi jewel có nút **Xem trên cây**.
+### Timeless
+- Check giá trên trade theo đúng **seed + conqueror**, chỉ listing **Instant Buyout**: giá = trung bình 5 listing rẻ nhất (chaos, làm tròn xuống). Không có ai bán buyout → 0. Chưa check xong → 0. Cache 6 giờ, chạy dần ở nền vì trade search bị giới hạn.
+- Nút **Xem trên trade** (cùng query) và **Xem trên cây**.
 
-## Mercenary (beta)
+### Timeless finder (beta)
+- Nhúng cây passive + tìm seed của Vilsol (https://vilsol.github.io/timeless-jewels, GPL-3.0, chạy online).
+- Ô dán tối đa 200 seed để check giá buyout theo cùng luật; đánh dấu seed đang có trong rương.
 
-Tab **Mercenary**: rê chuột vào Mercenary Warrant trong game, Ctrl+C, dán vào ô bên trái. Tick skill (bắt buộc) và support (tùy chọn) muốn tìm, rồi bấm **Check giá**.
-Mỗi skill tick = 1 nhóm "Mercenary Skill Group" trên trade (stat group `type: "mercenary"`, support phải nằm trên đúng skill đó).
-Giá = trung bình 5 listing Instant Buyout rẻ nhất (chaos, làm tròn xuống), chỉ tính listing đạt level tối thiểu (mặc định 83). Trade site không có bộ lọc level nên tool lọc trên 30 listing rẻ nhất; nút **Xem trên trade** mở cùng query (không lọc level). Kết quả nhớ 30 phút. Warrant trong stash chưa được định giá trong snapshot (vẫn tính 0).
+### Mercenary (beta)
+- Rê chuột vào Mercenary Warrant trong game, Ctrl+C, dán vào ô trái. Tick skill (bắt buộc) + support (tùy chọn) → **Check giá** / **Xem trên trade**.
+- Mỗi skill = 1 nhóm "Mercenary Skill Group" (support phải nằm trên đúng skill đó). Giá = trung bình 5 listing Instant Buyout rẻ nhất đạt level tối thiểu (mặc định 83). Trade không lọc được level nên tool lọc trên 30 listing rẻ nhất. Nhớ 30 phút.
+- Cột phải: **Warrant trong hòm đồ** (theo snapshot gần nhất), nút **Check** dán sẵn warrant đó vào ô trái.
+- Warrant trong snapshot vẫn tính giá 0.
 
-## Gem / Bài div / Dọn rương / Máy tính
+### Flip (beta)
+- So giá mỗi món qua cặp chaos và cặp divine trên Currency Exchange (poe.ninja); gợi ý 2 lệnh mua/bán tỉ lệ số nguyên và lời ước tính theo vốn. Không tự đặt lệnh.
 
-- **Gem**: lời từ lên level (L1 → max), quality (20 Gemcutter's Prism), Vaal (giá trị kỳ vọng ước tính) và transfigure ở Lab (gem gốc → bản transfigured cùng level/quality). Giá poe.ninja SkillGem, lọc theo số listing.
-- **Bài div**: giá cả bộ so với giá phần thưởng. Phần thưởng + số lá lấy từ poewiki.net (cargo API, nhớ 7 ngày ở `~/.config/poe-wealth/divcards_wiki.json`). Đánh dấu bài đang có trong hòm.
-- **Dọn rương**: đếm bộ chaos recipe từ rare trong các tab đang theo dõi (loại món theo icon) + danh sách đồ rẻ và regex tìm trong stash. Dữ liệu từ snapshot gần nhất (`stash_items.json`).
-- **Máy tính**: Vorici/Chromatic (công thức Siveran + bench), Fusing (tỉ lệ cộng đồng ước tính, so với bench), Anoint (công thức oil từ poewiki.net, giá oil poe.ninja).
-- **Phiên farm**: nhập chi phí đầu vào (scarab, map…) cho từng phiên; lời ròng = snapshot cuối − đầu − chi phí.
+### Map & Trade
+App đọc `logs/Client.txt` của game mỗi 20 giây (tự tìm, vd `/mnt/games/PoE/logs/Client.txt`; hoặc nhập trong Cài đặt). Lần đầu chỉ đọc 150 MB cuối.
+- **Map đã chạy**: mỗi map (theo seed) với thời gian trong map (tính cả khu phụ mở từ map), tổng thời gian, số lần vào lại, số lần chết, thuộc phiên farm nào; tổng số map, TB/map, map/giờ; thống kê theo tên map.
+- **Trade**: whisper mua/bán (`@From` / `@To`) với món, giá, tab/ô; "đã giao dịch" đoán theo dòng `Trade accepted.` sau khi người đó vào khu của bạn; tổng thu/chi ước tính; món được hỏi nhiều.
 
-## Challenge
+### Challenge
+- Tiến độ x/40, thanh mốc phần thưởng (mặc định 12/24/32/34/36, sửa được), "còn N challenge tới mốc M".
+- Lọc Chưa xong / ★ Ưu tiên / Đã xong / Tất cả, lọc **độ khó**, tìm theo tên/nội dung/ghi chú.
+- Mỗi thẻ: yêu cầu, các bước (tick tay được), sao ưu tiên, ghi chú riêng, tick xong tay.
+- Nút **▸ Guide** từng thẻ: mở hướng dẫn của guide cộng đồng **CraniumViolence** (https://craniumviolence.github.io, CC BY-NC-SA 4.0): độ khó, mẹo cho từng bước còn thiếu (giá item theo poe.ninja), ghi chú của tác giả, link tới đoạn trên trang. Guide tự tải lại sau 12 giờ (`challenges_guide.json`; xoá file để tải ngay).
+- **Đồng bộ** tiến độ: tải trang profile `pathofexile.com/account/view-profile/<tên-1234>/challenges` bằng POESESSID. Cloudflare hay chặn → dùng **Dán nguồn trang**:
+  - Cách nhanh: kéo nút **📋 Copy trang challenge** lên thanh bookmark (1 lần); mỗi lần mở trang challenge → bấm bookmark → quay lại app bấm **Dán từ clipboard**.
+  - Cách thủ công: Ctrl+U → Ctrl+A → Ctrl+C trên trang challenge rồi dán.
+- Chưa đồng bộ thì tab vẫn hiện 40 challenge từ guide để tick tay từng bước.
 
-Tab **Challenge**: tiến độ challenge của league (x/40), thanh mốc phần thưởng (mặc định 12/24/32/34/36, sửa được), mỗi challenge hiện bước còn thiếu, ghi chú, đánh sao ưu tiên, tick tay.
-**Đồng bộ** tải trang profile `pathofexile.com/account/view-profile/<tên-1234>/challenges` bằng POESESSID. Cloudflare hay chặn – khi đó mở trang trong trình duyệt, Ctrl+U → Ctrl+A → Ctrl+C rồi bấm **Dán nguồn trang**. Lưu ở `~/.config/poe-wealth/challenges.json`; ghi chú/sao/tick tay giữ nguyên khi đồng bộ lại.
+### Gem
+- Lời từ **lên level** (L1 → max), **quality** (20 Gemcutter's Prism), **Vaal** (giá trị kỳ vọng ước tính) và **transfigure** ở Lab (gem gốc → bản transfigured cùng level/quality). Lọc theo loại, số listing, lời tối thiểu.
 
-**Hướng dẫn từng challenge** lấy từ guide cộng đồng của CraniumViolence (https://craniumviolence.github.io, CC BY-NC-SA 4.0 – file `league.txt`, nhớ 12 giờ ở `challenges_guide.json`): độ khó, số bước cần, mẹo cho từng bước còn thiếu (giá item theo poe.ninja), ghi chú của tác giả, link tới đoạn tương ứng trên trang. Chưa đồng bộ được thì tab hiện luôn 40 challenge từ guide để tick tay từng bước.
+### Bài div
+- Giá cả bộ so với giá phần thưởng (đổi hay bán thẳng). Phần thưởng + số lá/bộ từ poewiki.net (nhớ 7 ngày). Đánh dấu bài đang có trong rương và đủ mấy bộ.
+
+### Dọn rương
+- **Chaos recipe**: đếm số bộ từ rare ilvl ≥ 60 trong các tab đang theo dõi (mỗi bộ cần ≥ 1 món ilvl 60–74; vũ khí = 2 tay, 1 tay + khiên, hoặc 2 vũ khí 1 tay), báo ô còn thiếu, bỏ qua rare đắt hơn X chaos. Kèm regex tìm rare ilvl 60–74: `"rarity: rare" "item level: (6[0-9]|7[0-4])"`.
+- **Đồ rác**: món có giá trị < X chaos, theo tab + vị trí ô, kèm regex tìm trong rương (chia nhiều lần nếu dài).
+
+### Máy tính
+- **Vorici**: chi phí trung bình của spam Chromatic và từng công thức bench (công thức Siveran), đánh dấu cách rẻ nhất.
+- **Fusing**: số fusing trung bình cho 5L/6L (tỉ lệ cộng đồng ước tính), tỉ lệ ra với số fusing đang có, so với bench.
+- **Anoint**: tìm notable / chỉ số / oil → 3 oil và tổng giá (công thức từ poewiki.net, giá oil poe.ninja).
+
+### Regex
+- **Map mod**: tick mod không muốn chạy + chỉ số tối thiểu (quantity, rarity, pack size) → regex cho map.
+- **Bestiary / Tattoo / Runegraft**: regex tìm món giá ≥ ngưỡng theo poe.ninja, ghi đè từng món được.
+
+### Patch game
+Port từ PoeRedux (https://github.com/Gineticus/PoeRedux):
+- **Minimap**: hiện toàn bộ minimap ngay từ đầu.
+- **Màu dòng Eldritch altar**: tô màu dòng của trụ Eater of Worlds / Searing Exarch theo nhóm (đổi được nhóm và màu).
+
+Cách dùng: tắt game → nhập đường dẫn `Content.ggpk` (standalone) hoặc `Bundles2/_.index.bin` (Steam/Epic) → **Kiểm tra** → **Áp dụng**. Sau mỗi lần game update phải áp dụng lại. Bản gốc backup ở `~/.config/poe-wealth/game-backup/`, nút **Khôi phục bản gốc** trả lại tất cả. Cần `pyooz` (đã có trong dependency). Sửa file game vi phạm ToS của GGG, có rủi ro bị ban.
+
+### Cài đặt
+- Tài khoản, league, tab/nhân vật theo dõi, auto snapshot (phút), gom item rẻ, check giá timeless.
+- Đường dẫn `Client.txt`, thư mục `My Games/Path of Exile`, số ngày báo filter cũ (để trống = tự tìm).
+
+## Dữ liệu (`~/.config/poe-wealth/`)
+
+| File | Nội dung |
+| --- | --- |
+| `config.json` | Cài đặt + POESESSID (chmod 600) |
+| `wealth.sqlite3` | Snapshot, phiên farm, giá timeless, map run, trade, vị trí đọc Client.txt |
+| `stash_items.json` | Bản nhẹ của item trong tab theo dõi (Dọn rương, Bài div) |
+| `warrants.json` | Mercenary Warrant trong rương |
+| `challenges.json` | Tiến độ, ghi chú, sao, tick tay của challenge |
+| `challenges_guide.json`, `divcards_wiki.json`, `anoints_wiki.json` | Bộ nhớ đệm guide / wiki |
+| `flip_cache.json` | Kết quả quét Flip |
+| `game-backup/` | Bản gốc file game trước khi patch |
+| `poe-wealth.log` | Log (bật chi tiết: `env POE_WEALTH_DEBUG=1 poe-wealth`) |
+
+## Nguồn dữ liệu
+
+- pathofexile.com: rương/nhân vật (API cũ `character-window`), trade API (timeless, mercenary), trang challenge.
+- poe.ninja: `poe.ninja/poe1/api/economy/{exchange|stash}` (API cũ `/api/data/...` đã 404).
+- poewiki.net (cargo API): phần thưởng bài div, công thức anoint.
+- craniumviolence.github.io: guide challenge (CC BY-NC-SA 4.0, chỉ hiển thị cho dùng cá nhân, có ghi công tác giả).
+- Client.txt của game: map tracker, trade.
+
+## Giới hạn đã biết
+
+- API cũ `character-window`: Map tab, Unique tab và folder có thể không trả item.
+- Rare chỉ tính theo base type khi ilvl ≥ 82 (giá base poe.ninja); rare có mod tốt bị định giá thấp hơn thực tế. Cluster jewel, beast và món không có trên poe.ninja = 0.
+- Một số số liệu là ước tính: Vaal gem, tỉ lệ fusing, giá bench Vorici (theo bảng 3.x), trạng thái "đã giao dịch" của trade.
+- Trang challenge và trade site trên trình duyệt hay dính Cloudflare.
+- Nếu poe.ninja đổi API, dòng trạng thái báo "poe.ninja lỗi …": sửa `NINJA` và danh sách type trong `poewealth/pricing.py`.

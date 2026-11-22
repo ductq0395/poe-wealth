@@ -74,6 +74,8 @@
   <div><div class="muted">Net worth</div><div class="big" id="total">–</div></div>
   <div><div class="muted">Divine</div><div id="divrate">–</div></div>
   <div><div class="muted">Snapshot gần nhất</div><div id="lastts">–</div></div>
+  <div><div class="muted">Lab hôm nay</div><a id="labLink" href="https://www.poelab.com/" target="_blank" style="color:var(--text)">poelab.com ↗</a></div>
+  <div title="" id="fltBox"><a href="https://www.filterblade.xyz/" target="_blank" class="muted" style="text-decoration:underline" title="Mở FilterBlade">Loot filter ↗</a><div id="fltState" class="muted">–</div></div>
   <div style="flex:1"></div>
   <div id="status" class="muted"></div>
   <button class="btn gold" id="snapBtn" onclick="snap()">Snapshot</button>
@@ -87,6 +89,7 @@
   <button data-s="finder">Timeless finder <span class="pill" style="font-size:10px">beta</span></button>
   <button data-s="merc">Mercenary <span class="pill" style="font-size:10px">beta</span></button>
   <button data-s="flip">Flip <span class="pill" style="font-size:10px">beta</span></button>
+  <button data-s="glog">Map &amp; Trade</button>
   <button data-s="chal">Challenge</button>
   <button data-s="gems">Gem</button>
   <button data-s="divs">Bài div</button>
@@ -113,11 +116,17 @@
     <div class="card" id="farmCard">
       <b>Phiên farm</b> <span class="muted" style="font-size:12px">– bắt đầu/dừng đều tự chụp snapshot, lời ròng = cuối − đầu − chi phí</span>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-        <input id="sessName" placeholder="Tên phiên (vd: Breach T16)" style="flex:1;min-width:0">
+        <input id="sessName" placeholder="Tên phiên (vd: tối thứ 7)" style="flex:1;min-width:0">
+        <input id="sessTag" list="sessTags" placeholder="Chiến thuật (Breach…)" style="width:150px">
+        <datalist id="sessTags"></datalist>
         <button class="btn gold" id="startBtn" onclick="sessStart()">Bắt đầu</button>
         <button class="btn" id="stopBtn" onclick="sessStop()">Dừng</button>
       </div>
       <div style="margin-top:8px"><table id="sessTable"></table></div>
+      <div id="tagBox" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:none">
+        <b style="font-size:13px">So sánh chiến thuật</b> <span class="muted" style="font-size:11px">(phiên đã dừng, gộp theo nhãn)</span>
+        <table id="tagTable" style="margin-top:6px"></table>
+      </div>
       <div id="costCard" style="display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
         <div style="display:flex;align-items:center;gap:8px"><b id="costTitle" style="flex:1"></b>
           <button class="btn sm" onclick="$('costCard').style.display='none'">Đóng</button></div>
@@ -160,6 +169,11 @@
         <div class="tablist" id="tabList"></div>
         <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn" onclick="setAllTabs(true)">Chọn hết</button><button class="btn" onclick="setAllTabs(false)">Bỏ hết</button>
+          <button class="btn gold" onclick="btRegex()" title="Regex tìm trong rương các item đang tick ở bảng bên phải">Build regex</button>
+        </div>
+        <div id="btRxBox" style="display:none;margin-top:8px">
+          <code id="btRx" style="display:block;background:#111217;border:1px solid var(--line);border-radius:6px;padding:6px;word-break:break-all;font-size:12px"></code>
+          <div style="display:flex;gap:6px;align-items:center;margin-top:4px"><button class="btn sm" onclick="btRxCopy()">Copy</button><span id="btRxInfo" class="muted" style="font-size:11px"></span></div>
         </div>
         <label style="display:flex;gap:6px;align-items:center;color:var(--text);margin-top:10px"><input type="checkbox" id="btChars" onchange="renderByTab()"> Gồm nhân vật</label>
         <label>So sánh với</label>
@@ -167,7 +181,7 @@
           <option value="0.0001">Lần trước</option><option value="1">1 giờ trước</option><option value="6">6 giờ</option>
           <option value="24" selected>24 giờ</option><option value="168">7 ngày</option><option value="0">Từ đầu</option>
         </select>
-        <p class="muted" style="font-size:12px">Bấm tab để bật/tắt. Bấm đúp để chỉ xem tab đó.</p>
+        <p class="muted" style="font-size:12px">Bấm tab để bật/tắt. Bấm đúp để chỉ xem tab đó. ⟳ = làm mới riêng tab đó (nhanh, các tab khác giữ như lần trước).</p>
         <a href="#" style="color:#6fa8dc" onclick="document.querySelector('nav button[data-s=settings]').click();loadTabs();return false">✎ Sửa tab theo dõi</a>
       </aside>
       <div style="min-width:0">
@@ -210,7 +224,14 @@
         <input id="fMin" type="number" placeholder="≥ chaos" style="width:100px" oninput="renderItems()">
         <span class="muted" id="itemSum"></span>
       </div>
-      <table id="itemTable" style="margin-top:10px"></table>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 520px;gap:16px;align-items:start;margin-top:10px">
+        <table id="itemTable"></table>
+        <div id="itChartBox" style="position:sticky;top:12px;background:#16171c;border:1px solid var(--line);border-radius:8px;padding:12px">
+          <div id="itChartTitle" class="muted">Bấm vào một dòng để xem giá theo thời gian.</div>
+          <div style="height:300px;margin-top:8px"><canvas id="itChart"></canvas></div>
+          <div id="itChartInfo" class="muted" style="font-size:12px;margin-top:6px"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -316,6 +337,24 @@
 
 
 
+
+  <section id="glog">
+    <div class="card">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div class="seg" id="glSeg"><button class="on" data-g="map">Map đã chạy</button><button data-g="trade">Trade</button></div>
+        <select id="glDays" onchange="glLoad()"><option value="0.5">12 giờ</option><option value="1" selected>Hôm nay (24 giờ)</option><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="0">Tất cả</option></select>
+        <input id="glFind" placeholder="🔍 tìm…" oninput="glRender()" style="width:200px">
+        <div style="flex:1"></div><span id="glState" class="muted" style="font-size:12px"></span>
+        <button class="btn" onclick="glScan()">Đọc log ngay</button>
+      </div>
+      <div id="glSum" style="display:flex;gap:28px;flex-wrap:wrap;margin-top:12px"></div>
+    </div>
+    <div class="row" style="align-items:flex-start">
+      <div class="card" style="flex:1;min-width:560px"><table id="glTable"></table></div>
+      <div class="card" id="glSide" style="flex:0 0 420px"></div>
+    </div>
+  </section>
+
   <section id="chal">
     <div class="card">
       <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
@@ -332,9 +371,12 @@
       </div>
       <div id="clState" class="muted" style="font-size:12px;margin-top:8px"></div>
       <div id="clPasteBox" style="display:none;margin-top:10px">
-        <p class="muted" style="font-size:12px;margin:0 0 6px">Khi Cloudflare chặn đồng bộ tự động: mở trang challenge trong trình duyệt (đã đăng nhập), bấm <b>Ctrl+U</b> để xem nguồn trang, <b>Ctrl+A</b>, <b>Ctrl+C</b>, rồi dán vào đây.</p>
+        <p class="muted" style="font-size:12px;margin:0 0 6px">Khi Cloudflare chặn đồng bộ tự động, lấy HTML trang challenge theo 1 trong 2 cách:<br>
+          <b>Cách nhanh</b>: kéo nút <a id="clBm" class="pill" style="background:#4a5a1e;color:#f0e6c8;text-decoration:none;cursor:grab" title="Kéo lên thanh bookmark">📋 Copy trang challenge</a> lên thanh bookmark (1 lần).
+          Sau đó mỗi lần: mở trang challenge → bấm bookmark đó → quay lại đây bấm <b>Dán từ clipboard</b>.<br>
+          <b>Cách thủ công</b>: mở trang challenge, <b>Ctrl+U</b> (xem nguồn) → <b>Ctrl+A</b> → <b>Ctrl+C</b> → dán vào ô dưới.</p>
         <textarea id="clPaste" rows="5" style="width:100%;background:#111217;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px ui-monospace,monospace" placeholder="<!DOCTYPE html> …"></textarea>
-        <div style="display:flex;gap:8px;margin-top:6px"><button class="btn gold" onclick="clPaste()">Đọc</button>
+        <div style="display:flex;gap:8px;margin-top:6px"><button class="btn gold" onclick="clPasteClip()">Dán từ clipboard</button><button class="btn" onclick="clPaste()">Đọc ô trên</button>
           <label style="margin:0 0 0 auto">Mốc phần thưởng <input id="clMs" style="width:120px" onchange="clMs()"></label></div>
       </div>
     </div>
@@ -388,6 +430,11 @@
       <div class="card" style="flex:0 0 560px">
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:16px">Chaos recipe</b><div style="flex:1"></div>
           <label style="margin:0">Bỏ qua rare giá &gt; <input id="chRecMax" type="number" min="0" value="5" style="width:60px" onchange="chLoad()"> c</label></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px">
+          <span class="muted">Tìm rare ilvl 60–74 trong rương:</span>
+          <code id="chIlvlRx" style="background:#111217;border:1px solid var(--line);border-radius:4px;padding:2px 6px">"rarity: rare" "item level: (6[0-9]|7[0-4])"</code>
+          <button class="btn sm" onclick="navigator.clipboard.writeText($('chIlvlRx').textContent).then(() => this.textContent = 'Đã copy', () => prompt('Copy:', $('chIlvlRx').textContent))">Copy</button>
+        </div>
         <div id="chRecipe" style="margin-top:10px"></div>
         <p class="muted" style="font-size:12px;margin:8px 0 0">Bộ = vũ khí (1 tay 2 tay, hoặc 2 vũ khí 1 tay, hoặc 1 tay + khiên) + mũ + giáp + găng + giày + đai + dây chuyền + 2 nhẫn, đều là rare ilvl ≥ 60.
           Mỗi bộ cần ít nhất 1 món ilvl 60–74 (thiếu món 60–74 thì bộ đó không đổi được). Cả bộ chưa identify = 2 chaos. Loại món theo icon của item.</p>
@@ -537,6 +584,9 @@
         <label>Gom item rẻ hơn (chaos) thành 1 dòng</label><input id="cMin" type="number" step="0.5" min="0">
         <label><input type="checkbox" id="cChars"> Tính đồ trên nhân vật</label>
         <label><input type="checkbox" id="cTimeless"> Check giá timeless jewel qua trade</label>
+        <label>File log của game (Client.txt) – để trống = tự tìm (vd /mnt/games/PoE/logs/Client.txt)</label><input id="cLog" style="width:100%" placeholder="tự tìm">
+        <label>Thư mục "My Games/Path of Exile" (để kiểm tra tuổi loot filter) – để trống = tự tìm trong Proton</label><input id="cDocs" style="width:100%" placeholder="tự tìm">
+        <label>Báo filter cũ sau (ngày)</label><input id="cFltDays" type="number" min="0" step="0.5">
         <div style="margin-top:14px;display:flex;gap:8px"><button class="btn gold" onclick="saveCfg()">Lưu</button>
           <button class="btn" onclick="clearSess()">Xoá cookie</button></div>
         <div id="cfgMsg" class="muted" style="margin-top:8px"></div>
@@ -578,7 +628,7 @@ const when = ts => new Date(ts * 1000).toLocaleString("vi-VN");
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("on"));
   b.classList.add("on"); $(b.dataset.s).classList.add("on");
-  document.querySelector("main").classList.toggle("wide", ["finder", "merc", "overview", "calc", "chal"].includes(b.dataset.s));
+  document.querySelector("main").classList.toggle("wide", ["finder", "merc", "overview", "calc", "chal", "glog", "items"].includes(b.dataset.s));
   if (b.dataset.s === "overview") loadSessions();
   if (b.dataset.s === "patch") loadPatch();
   if (b.dataset.s === "regex") rxTab(RX.tab);
@@ -587,6 +637,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.s === "finder") tfLoad();
   if (b.dataset.s === "gems") gmLoad();
   if (b.dataset.s === "chal") clLoad();
+  if (b.dataset.s === "glog") glLoad();
   if (b.dataset.s === "divs") dvLoad();
   if (b.dataset.s === "chest") chLoad();
   if (b.dataset.s === "calc") calcLoad();
@@ -604,8 +655,8 @@ async function refresh() {
 }
 
 function renderSources() {
-  const rows = LATEST.sources.map(s => `<tr class="click" onclick="pickSource('${esc(s.source)}')"><td>${esc(s.label)}</td><td class="num muted">${s.item_count}</td><td class="num">${fmt(s.value)}</td></tr>`);
-  $("sources").innerHTML = `<tr><th>Nguồn</th><th class="num">Item</th><th class="num">Giá trị</th></tr>` + rows.join("");
+  const rows = LATEST.sources.map(s => `<tr class="click" onclick="pickSource('${esc(s.source)}')"><td>${esc(s.label)}</td><td class="num muted">${s.item_count}</td><td class="num">${fmt(s.value)}</td><td style="width:1%">${reloadBtn(s.source)}</td></tr>`);
+  $("sources").innerHTML = `<tr><th>Nguồn</th><th class="num">Item</th><th class="num">Giá trị</th><th></th></tr>` + rows.join("");
 }
 function pickSource(src) { $("fSource").value = src; document.querySelector('nav button[data-s=items]').click(); renderItems(); }
 function renderTop() {
@@ -627,7 +678,7 @@ function renderItems() {
   const list = LATEST.items.filter(i => (!src || i.source === src) && (!cat || i.category === cat) && (!t || i.name.toLowerCase().includes(t)) && i.total >= min);
   $("itemSum").textContent = `${list.length} dòng · ${fmt(list.reduce((a, i) => a + i.total, 0))}`;
   $("itemTable").innerHTML = `<tr><th></th><th>Item</th><th>Loại</th><th>Nguồn</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Tổng</th></tr>` +
-    list.slice(0, 1000).map(i => `<tr><td>${img(i.icon)}</td><td>${esc(i.name)}</td><td><span class="pill">${i.category}</span></td><td class="muted">${esc(label[i.source] || i.source)}</td>
+    list.slice(0, 1000).map(i => `<tr class="click ${IT.key === i.key ? "sel" : ""}" onclick="itChart('${esc(i.key || "")}', '${esc(i.name)}')"><td>${img(i.icon)}</td><td>${esc(i.name)}</td><td><span class="pill">${i.category}</span></td><td class="muted">${esc(label[i.source] || i.source)}</td>
       <td class="num">${+i.qty.toFixed(0)}</td><td class="num">${i.unit ? fmt(i.unit, true) : ""}</td><td class="num">${fmt(i.total)}</td></tr>`).join("");
 }
 // mods may be strings or {description: "a\nb"} objects (newer GGG API / older snapshots)
@@ -688,7 +739,7 @@ function renderByTab() {
   BT.known = new Set(BT.rows.map(r => r.src));
   $("tabList").innerHTML = BT.rows.map(r => `<div class="ti ${BT.active.has(r.src) ? "on" : ""} ${r.missing ? "dim" : ""}" onclick="toggleTab('${esc(r.src)}')" ondblclick="soloTab('${esc(r.src)}')">
       ${swatch(r.color)}<span class="tn">${esc(r.label)}</span>
-      <span class="tv">${r.missing ? "chưa có" : r.cur != null ? short(r.cur) : "–"}${r.delta ? `<br>${signed(r.delta)}` : ""}</span></div>`).join("")
+      <span class="tv">${r.missing ? "chưa có" : r.cur != null ? short(r.cur) : "–"}${r.delta ? `<br>${signed(r.delta)}` : ""}</span>${reloadBtn(r.src)}</div>`).join("")
     || `<div class="muted">Chưa tick tab nào. Vào Cài đặt → Tải danh sách tab.</div>`;
   renderBreakdown(); fillBtCats(); renderBtItems(); drawTabChart();
 }
@@ -736,6 +787,29 @@ function renderBtItems() {
 function sortBt(c) { BT.sort = { col: c, dir: BT.sort.col === c ? -BT.sort.dir : (c === "name" || c === "tab" ? 1 : -1) }; renderBtItems(); }
 function checkRow(n, on) { const k = rowKey(BT.visible[n]); on ? BT.unchecked.delete(k) : BT.unchecked.add(k); renderBtItems(); }
 function checkAll(on) { for (const i of BT.visible) on ? BT.unchecked.delete(rowKey(i)) : BT.unchecked.add(rowKey(i)); renderBtItems(); }
+// stash-search regex for the ticked items: shortest piece of each name that no other (unticked) item
+// in the shown tabs contains; split into ≤250-char searches
+let BT_RX = { groups: [], i: -1 };
+function btRegex() {
+  if (!BT.visible) renderBtItems();
+  const base = n => n.replace(/\s*\((?:L\d|T\d|\d+L|ilvl)[^)]*\)\s*$/i, "").trim();   // drop our variant suffix "(L20 Q20)", "(T16)", "(6L)"
+  const sel = (BT.visible || []).filter(i => !BT.unchecked.has(rowKey(i)) && i.category !== "other");
+  if (!sel.length) { $("btRxBox").style.display = ""; $("btRx").textContent = "(chưa tick item nào)"; $("btRxInfo").textContent = ""; return; }
+  const want = new Set(sel.map(i => base(i.name)));
+  const others = [...new Set(LATEST.items.filter(i => BT.active.has(i.source) && !want.has(base(i.name))).map(i => rxClean(base(i.name))))];
+  const parts = [...new Set([...want].map(n => rxUnique(n, others, 4)).filter(Boolean))];   // ≥4 chars: game search also matches mod/description text
+  BT_RX = { groups: rxGroups(parts, false, RX_LIMIT), i: -1 };
+  $("btRxBox").style.display = "";
+  $("btRx").textContent = BT_RX.groups[0];
+  $("btRxInfo").textContent = `${want.size} item` + (BT_RX.groups.length > 1 ? ` · dài nên chia ${BT_RX.groups.length} lần tìm, bấm Copy lần lượt` : "");
+}
+async function btRxCopy() {
+  if (!BT_RX.groups.length) return;
+  BT_RX.i = (BT_RX.i + 1) % BT_RX.groups.length;
+  const t = BT_RX.groups[BT_RX.i]; $("btRx").textContent = t;
+  try { await navigator.clipboard.writeText(t); } catch { prompt("Copy:", t); }
+  $("btRxInfo").textContent = BT_RX.groups.length > 1 ? `Đã copy ${BT_RX.i + 1}/${BT_RX.groups.length}` : "Đã copy";
+}
 async function copySelected() {
   const sel = BT.visible.filter(i => !BT.unchecked.has(rowKey(i)));
   const txt = sel.map(i => `${i.name} x${+i.qty.toFixed(0)} — ${short(i.unit || i.total / i.qty)} mỗi cái (${short(i.total)})`).join("\n")
@@ -975,6 +1049,94 @@ function mcStashCheck(i) {
   mcParse();
 }
 
+// ---------- item price history (tab Item) ----------
+let IT = { key: null, chart: null };
+async function itChart(key, name) {
+  if (!key) return;
+  IT.key = key; renderItems();
+  $("itChartTitle").innerHTML = `<b style="color:var(--text)">${esc(name)}</b>`;
+  let rows = [];
+  try { rows = await api(`/api/item/history?key=${encodeURIComponent(key)}`); } catch (e) { $("itChartInfo").textContent = e.message; return; }
+  const div = rows.length ? rows[rows.length - 1].divine_rate : 0, useDiv = rows.some(r => div && r.unit >= div);
+  const conv = v => useDiv ? +(v / div).toFixed(3) : +v.toFixed(2);
+  if (IT.chart) IT.chart.destroy();
+  IT.chart = new Chart($("itChart"), {
+    type: "line",
+    data: { labels: rows.map(r => new Date(r.ts * 1000).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })),
+      datasets: [
+        { label: `Đơn giá (${useDiv ? "div" : "chaos"})`, data: rows.map(r => conv(r.unit)), borderColor: "#c8a25a", backgroundColor: "#c8a25a33", yAxisID: "y", tension: .2, pointRadius: 2 },
+        { label: "Số lượng", data: rows.map(r => r.qty), borderColor: "#6fa8dc", yAxisID: "y1", stepped: true, pointRadius: 0 }] },
+    options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: { legend: { labels: { color: "#8d8a80" } } },
+      scales: { x: { ticks: { color: "#8d8a80", maxTicksLimit: 6 }, grid: { color: "#2c2f39" } },
+        y: { position: "left", ticks: { color: "#c8a25a" }, grid: { color: "#2c2f39" } },
+        y1: { position: "right", ticks: { color: "#6fa8dc", precision: 0 }, grid: { display: false } } } } });
+  if (rows.length) {
+    const a = rows[0], b = rows[rows.length - 1], ch = a.unit ? (b.unit - a.unit) / a.unit * 100 : 0;
+    $("itChartInfo").innerHTML = `${rows.length} snapshot · giá ${fmt(a.unit, true)} → ${fmt(b.unit, true)} <span class="${ch >= 0 ? "pos" : "neg"}">(${ch >= 0 ? "+" : ""}${ch.toFixed(0)}%)</span> · đang giữ ${+b.qty.toFixed(0)} = ${fmt(b.total)}`;
+  } else $("itChartInfo").textContent = "Chưa có lịch sử.";
+}
+
+// ---------- header: loot filter age ----------
+async function topbarLoad() {
+  let t; try { t = await api("/api/topbar"); } catch { return; }
+  if (t.lab_url) $("labLink").href = t.lab_url;
+  const f = t.filter || {};
+  if (!f.mtime) { $("fltState").innerHTML = `<span class="muted">không thấy</span>`; $("fltBox").title = f.dir ? `Không có filter trong ${f.dir}` : "Không tìm thấy thư mục My Games/Path of Exile – nhập trong Cài đặt (poe_docs_path)"; return; }
+  const days = (Date.now() / 1000 - f.mtime) / 86400, old = days >= (t.warn_days || 3);
+  $("fltState").innerHTML = `<span class="${old ? "err" : "pos"}">${days < 1 ? Math.round(days * 24) + " giờ" : days.toFixed(1) + " ngày"} trước</span>`;
+  $("fltBox").title = `${f.online ? "Online filter" : "Filter"}: ${f.file || ""}\nCập nhật: ${when(f.mtime)}\nThư mục: ${f.dir}`;
+}
+
+// ---------- map & trade (Client.txt) ----------
+let GL = { tab: "map", maps: null, trades: null };
+document.querySelectorAll("#glSeg button").forEach(b => b.onclick = () => {
+  GL.tab = b.dataset.g; document.querySelectorAll("#glSeg button").forEach(x => x.classList.toggle("on", x === b)); glLoad(); });
+const dur = s => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}h${String(m).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+async function glLoad() {
+  const d = $("glDays").value;
+  try {
+    if (GL.tab === "map") GL.maps = await api(`/api/maps?days=${d}`); else GL.trades = await api(`/api/trades?days=${d}`);
+  } catch (e) { $("glState").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  const st = await api("/api/log/status").catch(() => ({}));
+  $("glState").innerHTML = st.path ? `Log: ${esc(st.path)}${st.last_scan ? " · đọc lúc " + when(st.last_scan) : ""}` : `<span class="err">${esc(st.status || "Không tìm thấy Client.txt")}</span>`;
+  glRender();
+}
+async function glScan() { await post("/api/log/scan").catch(e => alert(e.message)); glLoad(); }
+const stat = (label, v) => `<div><div class="muted">${label}</div><div class="big">${v}</div></div>`;
+function glRender() {
+  const f = $("glFind").value.trim().toLowerCase();
+  if (GL.tab === "map") {
+    const m = GL.maps; if (!m) return;
+    $("glSum").innerHTML = stat("Map", m.count) + stat("TB / map", dur(m.avg)) + stat("Map / giờ", m.per_hour ? m.per_hour.toFixed(1) : "–") + stat("Chết", m.deaths) + stat("Thời gian trong map", dur(m.active));
+    const runs = m.runs.filter(r => !f || (r.name + " " + r.session).toLowerCase().includes(f));
+    $("glTable").innerHTML = `<tr><th>Bắt đầu</th><th>Map</th><th class="num">Lv</th><th class="num">Trong map</th><th class="num">Tổng</th><th class="num">Vào lại</th><th class="num">Chết</th><th>Phiên farm</th></tr>` +
+      runs.slice(0, 800).map(r => `<tr><td class="muted" style="font-size:12px">${when(r.started)}</td><td>${esc(r.name)}</td><td class="num">${r.level}</td>
+        <td class="num"><b>${dur(r.active)}</b></td><td class="num muted">${dur(r.ended - r.started)}</td><td class="num muted">${r.entries > 1 ? r.entries - 1 : ""}</td>
+        <td class="num ${r.deaths ? "neg" : ""}">${r.deaths || ""}</td><td class="muted" style="font-size:12px">${esc(r.session)}</td></tr>`).join("") ||
+      `<tr><td class="muted">Chưa có map nào trong khoảng này.</td></tr>`;
+    $("glSide").innerHTML = `<b>Theo map</b><table style="margin-top:6px"><tr><th>Map</th><th class="num">Lần</th><th class="num">TB</th><th class="num">Chết</th></tr>` +
+      m.by_name.map(b => `<tr><td>${esc(b.name)}</td><td class="num">${b.n}</td><td class="num">${dur(b.active / b.n)}</td><td class="num">${b.deaths || ""}</td></tr>`).join("") + `</table>
+      <p class="muted" style="font-size:12px">"Trong map" chỉ tính lúc ở trong map (gồm khu phụ mở từ map), không tính lúc về hideout. Đọc từ Client.txt của game mỗi 20 giây.</p>`;
+  } else {
+    const t = GL.trades; if (!t) return;
+    $("glSum").innerHTML = stat("Lượt hỏi mua", t.asked) + stat("Đã bán", t.sold) + stat("Thu (ước tính)", fmt(t.income)) + stat("Đã mua", t.bought) + stat("Chi", fmt(t.spent));
+    const rows = t.rows.filter(r => !f || (r.name + " " + r.item).toLowerCase().includes(f));
+    $("glTable").innerHTML = `<tr><th>Lúc</th><th></th><th>Người</th><th>Item</th><th class="num">Giá</th><th class="num">≈ chaos</th><th>Tab · ô</th><th>Trạng thái</th></tr>` +
+      rows.slice(0, 800).map(r => `<tr style="${r.status === "đã giao dịch" ? "background:#1f2418" : ""}"><td class="muted" style="font-size:12px">${when(r.ts)}</td>
+        <td><span class="pill" style="${r.dir === "in" ? "background:#24361f;color:#b8e0a8" : "background:#3a2a1e;color:#f0b88a"}">${r.dir === "in" ? "bán" : "mua"}</span></td>
+        <td>${esc(r.name)}</td><td>${r.qty > 1 ? +r.qty + "× " : ""}${esc(r.item)}</td>
+        <td class="num">${r.price != null ? `${+r.price} ${esc(r.currency || "")}` : "–"}</td><td class="num">${r.chaos != null ? fmt(r.chaos) : ""}</td>
+        <td class="muted" style="font-size:12px">${esc(r.tab || "")}${r.x != null ? ` · ${r.x}, ${r.y}` : ""}</td>
+        <td>${r.status === "đã giao dịch" ? '<span class="pos">✔ đã giao dịch</span>' : '<span class="muted">chỉ hỏi</span>'}</td></tr>`).join("") ||
+      `<tr><td class="muted">Chưa có whisper mua bán nào trong khoảng này.</td></tr>`;
+    const by = {}; t.rows.filter(r => r.dir === "in").forEach(r => { const x = by[r.item] || (by[r.item] = { item: r.item, n: 0, sold: 0 }); x.n++; if (r.status === "đã giao dịch") x.sold++; });
+    $("glSide").innerHTML = `<b>Món được hỏi nhiều</b><table style="margin-top:6px"><tr><th>Item</th><th class="num">Hỏi</th><th class="num">Bán</th></tr>` +
+      Object.values(by).sort((a, b) => b.n - a.n).slice(0, 25).map(x => `<tr><td>${esc(x.item)}</td><td class="num">${x.n}</td><td class="num">${x.sold || ""}</td></tr>`).join("") + `</table>
+      <p class="muted" style="font-size:12px">"Đã giao dịch" đoán theo log: người whisper vào khu của bạn rồi có dòng "Trade accepted" (log không ghi tên trong dòng đó). Món hỏi nhiều mà ít bán → có thể đặt giá cao.</p>`;
+  }
+}
+
 // ---------- challenge tracker ----------
 let CL = null, CL_F = "todo", CL_DSEL = new Set();   // selected difficulties (empty = all)
 const CL_DORDER = ["Very Easy", "Easy", "Average", "Hard", "Very Hard"];
@@ -1013,6 +1175,21 @@ async function clPaste() {
   try { CL = { ...CL, ...(await post("/api/challenges/paste", { html })) }; $("clPaste").value = ""; $("clPasteBox").style.display = "none"; clRender(); }
   catch (e) { $("clState").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 }
+async function clPasteClip() {
+  let t = "";
+  try { t = await navigator.clipboard.readText(); } catch (e) { $("clState").innerHTML = `<span class="err">Trình duyệt không cho đọc clipboard – dán tay (Ctrl+V) vào ô rồi bấm "Đọc ô trên".</span>`; return; }
+  if (!/achievement/i.test(t)) { $("clState").innerHTML = `<span class="err">Clipboard không phải HTML trang challenge (chưa bấm bookmark trên trang challenge?).</span>`; return; }
+  $("clPaste").value = t; clPaste();
+}
+// bookmarklet: copies the whole page HTML (run it on the challenge page of pathofexile.com)
+(function () {
+  const code = `(()=>{const h=document.documentElement.outerHTML;const ok=()=>alert('Đã copy trang challenge ('+h.length+' ký tự). Quay lại PoE Wealth bấm "Dán từ clipboard".');` +
+    `const fb=()=>{const t=document.createElement('textarea');t.value=h;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();ok();};` +
+    `if(!/achievement/.test(h)){alert('Trang này không có danh sách challenge – mở trang challenge của bạn trên pathofexile.com rồi bấm lại.');return;}` +
+    `navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(h).then(ok,fb):fb();})()`;
+  const a = document.getElementById("clBm");
+  if (a) { a.href = "javascript:" + encodeURIComponent(code); a.onclick = e => { e.preventDefault(); alert("Kéo nút này lên thanh bookmark, rồi bấm nó khi đang ở trang challenge trên pathofexile.com."); }; }
+})();
 async function clItem(id, body) { CL = { ...CL, ...(await post("/api/challenges/item", { id, ...body })) }; clRender(); }
 async function clMs() {
   const ms = $("clMs").value.split(/[^0-9]+/).filter(Boolean).map(Number);
@@ -1591,6 +1768,12 @@ async function poll() {
 }
 const state = {};
 async function snap() { try { await post("/api/snapshot"); wasRunning = true; poll(); } catch (e) { alert(e.message); } }
+// re-read just one stash tab / character (2 requests); the other sources are copied from the last snapshot
+async function snapOne(src, ev) {
+  ev?.stopPropagation();
+  try { await post("/api/snapshot/source", { source: src }); wasRunning = true; poll(); } catch (e) { alert(e.message); }
+}
+const reloadBtn = src => `<button class="btn sm" title="Làm mới riêng tab này" style="padding:1px 6px" onclick="snapOne('${esc(src)}', event)">⟳</button>`;
 async function recheckTimeless() { await post("/api/timeless/recheck"); wasRunning = true; }
 
 // ---------- sessions ----------
@@ -1599,13 +1782,17 @@ async function loadSessions() {
   const open = rows.find(r => !r.end_snapshot);
   $("startBtn").disabled = !!open; $("stopBtn").disabled = !open;
   SESS = rows;
-  $("sessTable").innerHTML = rows.length ? `<tr><th>Phiên</th><th class="num">Thời gian</th><th class="num">Chi phí</th><th class="num">Lời ròng</th><th class="num">/giờ</th><th></th></tr>` +
+  renderTags(rows);
+  $("sessTable").innerHTML = rows.length ? `<tr><th>Phiên</th><th class="num">Thời gian</th><th class="num">Map</th><th class="num">Chi phí</th><th class="num">Lời ròng</th><th class="num">/giờ</th><th></th></tr>` +
     rows.map(r => {
       const dur = ((r.ended || Date.now() / 1000) - r.started) / 60;
       const cls = r.profit >= 0 ? "pos" : "neg";
       return `<tr class="${r.end_snapshot ? "click" : ""}" onclick="${r.end_snapshot ? `showDiff(${r.id}, '${esc(r.name)}', this)` : ""}">
-        <td>${esc(r.name)} ${r.end_snapshot ? "" : '<span class="pill">đang chạy</span>'}<div class="muted" style="font-size:11px">${when(r.started)}</div></td>
+        <td>${esc(r.name)} ${r.end_snapshot ? "" : '<span class="pill">đang chạy</span>'}
+          <a href="#" onclick="sessTagEdit(${r.id}, '${esc(r.tag || "")}', event);return false" class="pill" style="text-decoration:none;${r.tag ? "background:#3a3520;color:#e8d48a" : ""}">${r.tag ? esc(r.tag) : "+ nhãn"}</a>
+          <div class="muted" style="font-size:11px">${when(r.started)}</div></td>
         <td class="num">${Math.floor(dur / 60)}h${String(Math.round(dur % 60)).padStart(2, "0")}</td>
+        <td class="num" title="${r.per_map != null ? "Lời ròng mỗi map: " + fmt(r.per_map) : ""}">${r.maps || ""}${r.per_map != null ? `<div class="muted" style="font-size:11px">${fmt(r.per_map)}/map</div>` : ""}</td>
         <td class="num"><a href="#" onclick="event.stopPropagation();costOpen(${r.id});return false" style="color:${r.cost ? "var(--red)" : "var(--muted)"}">${r.cost ? "−" + fmt(r.cost) : "+ nhập"}</a></td>
         <td class="num ${cls}" title="${r.gross != null ? "Snapshot cuối − đầu: " + fmt(r.gross) : ""}">${r.profit != null ? fmt(r.profit) : "–"}</td><td class="num ${cls}">${r.per_hour != null ? fmt(r.per_hour) : "–"}</td>
         <td><button class="btn sm" onclick="event.stopPropagation();delSess(${r.id})">✕</button></td></tr>`;
@@ -1639,7 +1826,25 @@ async function costSave() {
   try { await post(`/api/session/${COST.id}/costs`, { items: COST.rows }); } catch (e) { return alert(e.message); }
   $("costCard").style.display = "none"; loadSessions();
 }
-async function sessStart() { try { await post("/api/session/start", { name: $("sessName").value }); wasRunning = true; } catch (e) { alert(e.message); } }
+async function sessStart() { try { await post("/api/session/start", { name: $("sessName").value, tag: $("sessTag").value }); wasRunning = true; } catch (e) { alert(e.message); } }
+async function sessTagEdit(id, cur, ev) {
+  ev?.stopPropagation();
+  const t = prompt("Nhãn chiến thuật cho phiên này (để trống = bỏ nhãn):", cur || ""); if (t === null) return;
+  await post(`/api/session/${id}/tag`, { tag: t }); loadSessions();
+}
+function renderTags(rows) {
+  const tags = [...new Set(rows.map(r => r.tag).filter(Boolean))].sort();
+  $("sessTags").innerHTML = tags.map(t => `<option value="${esc(t)}">`).join("");
+  const g = {};
+  rows.filter(r => r.end_snapshot && r.profit != null).forEach(r => {
+    const k = r.tag || "(chưa gắn nhãn)", x = g[k] || (g[k] = { tag: k, n: 0, h: 0, p: 0, maps: 0 });
+    x.n++; x.h += r.hours || 0; x.p += r.profit; x.maps += r.maps || 0; });
+  const list = Object.values(g).sort((a, b) => b.p / (b.h || 1) - a.p / (a.h || 1));
+  $("tagBox").style.display = list.length && tags.length ? "" : "none";
+  $("tagTable").innerHTML = `<tr><th>Nhãn</th><th class="num">Phiên</th><th class="num">Giờ</th><th class="num">Map</th><th class="num">Lời ròng/giờ</th><th class="num">Lời/map</th></tr>` +
+    list.map(x => `<tr><td><span class="pill">${esc(x.tag)}</span></td><td class="num">${x.n}</td><td class="num">${x.h.toFixed(1)}</td><td class="num">${x.maps || ""}</td>
+      <td class="num ${x.p >= 0 ? "pos" : "neg"}"><b>${x.h ? fmt(x.p / x.h) : "–"}</b></td><td class="num">${x.maps ? fmt(x.p / x.maps) : "–"}</td></tr>`).join("");
+}
 async function sessStop() { try { await post("/api/session/stop"); wasRunning = true; } catch (e) { alert(e.message); } }
 async function delSess(id) { if (confirm("Xoá phiên này?")) { await api(`/api/session/${id}`, { method: "DELETE" }); loadSessions(); } }
 async function showDiff(id, name, tr) {
@@ -1658,13 +1863,15 @@ async function loadCfg() {
   $("cAcc").value = CFG.account_name; $("cRealm").value = CFG.realm; $("cLeague").value = CFG.league;
   $("cAuto").value = CFG.auto_snapshot_minutes; $("cMin").value = CFG.min_item_value;
   $("cChars").checked = CFG.include_characters; $("cTimeless").checked = CFG.price_timeless;
+  $("cLog").value = CFG.client_log_path || ""; $("cDocs").value = CFG.poe_docs_path || ""; $("cFltDays").value = CFG.filter_warn_days ?? 3;
 }
 async function saveCfg(extra = {}) {
   const body = { account_name: $("cAcc").value.trim(), realm: $("cRealm").value, league: $("cLeague").value.trim(),
     auto_snapshot_minutes: +$("cAuto").value || 0, min_item_value: +$("cMin").value || 0,
-    include_characters: $("cChars").checked, price_timeless: $("cTimeless").checked, ...extra };
+    include_characters: $("cChars").checked, price_timeless: $("cTimeless").checked,
+    client_log_path: $("cLog").value.trim(), poe_docs_path: $("cDocs").value.trim(), filter_warn_days: +$("cFltDays").value || 3, ...extra };
   if ($("cSess").value.trim()) body.poesessid = $("cSess").value.trim();
-  try { await post("/api/config", body); $("cSess").value = ""; $("cfgMsg").textContent = "Đã lưu."; await loadCfg(); refresh(); }
+  try { await post("/api/config", body); $("cSess").value = ""; $("cfgMsg").textContent = "Đã lưu."; await loadCfg(); refresh(); topbarLoad(); }
   catch (e) { $("cfgMsg").textContent = e.message; }
 }
 const clearSess = () => saveCfg({ clear_poesessid: true });
@@ -1695,7 +1902,7 @@ async function saveChars() {
   await post("/api/config", { characters: names }); CFG.characters = names;
 }
 
-(async () => { await loadCfg(); await refresh(); loadSessions(); poll(); setInterval(poll, 2000); })();
+(async () => { await loadCfg(); await refresh(); loadSessions(); poll(); setInterval(poll, 2000); topbarLoad(); setInterval(topbarLoad, 600000); })();
 </script>
 </body>
 </html>

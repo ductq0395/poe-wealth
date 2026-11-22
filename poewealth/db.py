@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS snapshot_items (
     extra TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_items_snap ON snapshot_items(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_items_key ON snapshot_items(key);
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
@@ -68,6 +69,9 @@ class DB:
         if "costs" not in cols:   # farm session input costs: JSON [{name, qty, unit}]
             with self.conn:
                 self.conn.execute("ALTER TABLE sessions ADD COLUMN costs TEXT DEFAULT '[]'")
+        if "tag" not in cols:     # farm strategy label (Breach, Ritual…) to compare strategies
+            with self.conn:
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN tag TEXT DEFAULT ''")
 
     def q(self, sql: str, args=()) -> list[dict]:
         return [dict(r) for r in self.conn.execute(sql, args).fetchall()]

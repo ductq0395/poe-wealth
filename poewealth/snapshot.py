@@ -103,7 +103,10 @@ def price_items(items: list[dict], source: str, cfg: Config, prices: Prices, tim
     return rows, to_queue
 
 
-async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessPricer, limiter) -> int:
+async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessPricer, limiter,
+                        only: str | None = None) -> int:
+    """Full snapshot, or with only="tab:<id>" / "char:<name>": re-read just that source and copy every
+    other source from the previous snapshot (2 requests instead of ~21)."""
     if _lock.locked():
         raise RuntimeError("Đang snapshot rồi")
     async with _lock:
@@ -120,15 +123,21 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
             warrants: list[dict] = []
             inventory: list[dict] = []
 
-            if cfg.tab_ids:
+            prev = db.latest_snapshot(cfg.league) if only else None
+            if only and not prev:
+                raise RuntimeError("Chưa có snapshot nào – chụp snapshot đầy đủ trước")
+            tab_ids = cfg.tab_ids if not only else ([only[4:]] if only.startswith("tab:") else [])
+            if tab_ids:
                 progress["message"] = "Lấy danh sách tab…"
                 tabs = {t["id"]: t for t in await client.stash_tabs()}
                 db.save_tab_meta(list(tabs.values()))
-                for n, tid in enumerate(cfg.tab_ids, 1):
+                for n, tid in enumerate(tab_ids, 1):
                     t = tabs.get(tid)
                     if not t:
+                        if only:
+                            raise RuntimeError("Không thấy tab này trong rương (đã xoá/đổi?)")
                         continue
-                    progress["message"] = base_msg["m"] = f"Tab {n}/{len(cfg.tab_ids)}: {t['n']}"
+                    progress["message"] = base_msg["m"] = f"Tab {n}/{len(tab_ids)}: {t['n']}"
                     items = await client.stash_items(t["i"])
                     warrants += mercenary.collect_warrants(items, f"tab:{tid}", t["n"])
                     inventory += [chest.light_item(it, f"tab:{tid}", t["n"], prices) for it in items]
@@ -138,11 +147,14 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
                     all_rows += rows
                     queue += q
 
-            if cfg.include_characters:
+            want_chars = cfg.include_characters if not only else only.startswith("char:")
+            if want_chars:
                 progress["message"] = "Lấy nhân vật…"
                 chars = await client.characters()
                 for c in chars:
                     if cfg.characters and c["name"] not in cfg.characters:
+                        continue
+                    if only and f"char:{c['name']}" != only:
                         continue
                     progress["message"] = base_msg["m"] = f"Nhân vật {c['name']}"
                     items = await client.character_items(c["name"])
@@ -153,6 +165,19 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
                     all_rows += rows
                     queue += q
 
+            if only:
+                # keep every other source exactly as in the previous snapshot
+                for src in db.q("SELECT source,label,value,item_count FROM snapshot_sources WHERE snapshot_id=? AND source<>?",
+                                (prev["id"], only)):
+                    sources.append({"source": src["source"], "label": src["label"], "value": src["value"],
+                                    "count": src["item_count"]})
+                for r in db.q("SELECT source,key,name,category,qty,unit,total,icon,extra FROM snapshot_items "
+                              "WHERE snapshot_id=? AND source<>?", (prev["id"], only)):
+                    all_rows.append({**r, "extra": json.loads(r["extra"] or "{}")})
+                old_w = mercenary.load_stash(WARRANT_FILE, cfg.league).get("warrants", [])
+                warrants = [w for w in old_w if w.get("source") != only] + warrants
+                old_i = chest.load(STASH_FILE, cfg.league).get("items", [])
+                inventory = [i for i in old_i if i.get("source") != only] + inventory
             sid = db.save_snapshot(cfg.league, prices.divine, sources, all_rows)
             try:
                 mercenary.save_stash(WARRANT_FILE, cfg.league, warrants, time.time(), sid)
@@ -161,7 +186,7 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
                 logging.getLogger("poewealth").exception("lưu danh sách warrant lỗi")
             for it in queue:
                 timeless.enqueue(cfg.league, it)
-            msg = f"Xong snapshot #{sid}"
+            msg = f"Xong snapshot #{sid}" + (" (chỉ làm mới 1 tab, các tab khác giữ như lần trước)" if only else "")
             if prices.errors:
                 msg += f" (poe.ninja lỗi {len(prices.errors)} loại: {prices.errors[0]})"
             progress["message"] = msg

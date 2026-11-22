@@ -48,6 +48,10 @@ class Config:
     regex_map_min: dict = field(default_factory=dict)   # {"quantity": 80, "rarity": 0, "packsize": 0}
     regex_threshold: dict = field(default_factory=dict) # {"Beast": 10, "Tattoo": 5, "Runegraft": 5} chaos
     regex_override: dict = field(default_factory=dict)  # {"Beast": {"name": true/false}} manual tick
+    # game log (map tracker / trade history) + filter age
+    client_log_path: str = ""       # empty = auto-detect logs/Client.txt
+    poe_docs_path: str = ""         # "My Games/Path of Exile" folder; empty = auto-detect
+    filter_warn_days: float = 3.0
 
     def public(self) -> dict:
         d = asdict(self)
