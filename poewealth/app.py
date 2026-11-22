@@ -9,6 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -20,6 +21,7 @@ from .pricing import Prices
 from .ratelimit import Limiter, RateLimited
 from .snapshot import diff_snapshots, progress, take_snapshot
 from .timeless import TimelessPricer
+from .mercenary import MercPricer
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("POE_WEALTH_PORT", "8787"))
@@ -101,6 +103,9 @@ async def lifespan(app: FastAPI):
     state["notifier"] = alerts.Notifier()
     state["flip"] = flip.FlipScanner(state["limiter"])
     state["timeless"] = tp
+    mp = MercPricer(state["prices"])
+    mp.client_factory = new_client
+    state["merc"] = mp
     loop_task = asyncio.create_task(auto_loop())
     yield
     loop_task.cancel()
@@ -315,11 +320,42 @@ async def sessions():
            FROM sessions s JOIN snapshots a ON a.id=s.start_snapshot
            LEFT JOIN snapshots b ON b.id=s.end_snapshot ORDER BY s.id DESC""")
     for r in rows:
+        r["costs"] = json.loads(r.get("costs") or "[]")
+        r["cost"] = sum(float(c.get("qty") or 0) * float(c.get("unit") or 0) for c in r["costs"])
         if r["end_value"] is not None:
             hours = max((r["ended"] - r["started"]) / 3600, 1e-6)
-            r["profit"] = r["end_value"] - r["start_value"]
+            r["gross"] = r["end_value"] - r["start_value"]
+            r["profit"] = r["gross"] - r["cost"]
             r["per_hour"] = r["profit"] / hours
     return rows
+
+
+@app.post("/api/session/{sid}/costs")
+async def session_costs(sid: int, body: dict):
+    """body: {items:[{name, qty, unit?}]} – unit (chaos) defaults to today's poe.ninja price."""
+    p = state["prices"]
+    if cfg().league:
+        await p.refresh(cfg().league)
+    items = []
+    for c in body.get("items", []):
+        name, qty = str(c.get("name") or "").strip(), float(c.get("qty") or 0)
+        if not name or qty <= 0:
+            continue
+        unit = c.get("unit")
+        unit = float(unit) if unit not in (None, "") else p.stack.get(name, 0.0)
+        items.append({"name": name, "qty": qty, "unit": unit})
+    with state["db"].conn:
+        state["db"].conn.execute("UPDATE sessions SET costs=? WHERE id=?", (json.dumps(items), sid))
+    return {"items": items}
+
+
+@app.get("/api/prices/names")
+async def price_names():
+    """Names + chaos price of everything poe.ninja prices as a stack (cost picker)."""
+    p = state["prices"]
+    if cfg().league:
+        await p.refresh(cfg().league)
+    return sorted(([n, round(v, 2)] for n, v in p.stack.items() if v > 0), key=lambda x: x[0])
 
 
 @app.get("/api/session/{sid}/diff")
@@ -441,6 +477,204 @@ async def finder_results(body: dict):
                      "price": c["price_chaos"] if c else None, "listings": c["listings"] if c else 0,
                      "detail": c["detail"] if c else "", "owned": [f"{o['conq']} ({o['source']})" for o in mine]})
     return {"rows": rows, "timeless": tp.state(), "divine": state["prices"].divine}
+
+
+# ---------------- mercenary warrant (trade price) ----------------
+@app.post("/api/merc/parse")
+async def merc_parse(body: dict):
+    try:
+        return await state["merc"].parse(body.get("text") or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/merc/stash")
+async def merc_stash():
+    """Warrants found in the tracked tabs/characters at the last snapshot."""
+    from .mercenary import load_stash
+    from .snapshot import WARRANT_FILE
+    return load_stash(WARRANT_FILE, cfg().league)
+
+
+@app.post("/api/merc/price")
+async def merc_price(body: dict):
+    """body: {groups:[{skill:id, supports:[id]}], min_level:int, force:bool}"""
+    if not cfg().league:
+        raise HTTPException(400, "Chưa chọn league trong Cài đặt")
+    groups = [{"skill": g.get("skill"), "supports": [s for s in g.get("supports", []) if isinstance(s, str)]}
+              for g in body.get("groups", []) if isinstance(g, dict)]
+    try:
+        return await state["merc"].price(cfg().league, groups, int(body.get("min_level") or 0), bool(body.get("force")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ---------------- gems / div cards / stash clean-up / calculators ----------------
+def _need_league():
+    if not cfg().league:
+        raise HTTPException(400, "Chưa chọn league trong Cài đặt")
+
+
+@app.get("/api/gems")
+async def gems_api(min_profit: float = 1, min_listings: int = 3):
+    from . import gems
+    _need_league()
+    p = state["prices"]
+    await p.refresh(cfg().league)
+    res = gems.analyse(p)
+    res["rows"] = [r for r in res["rows"] if r["profit"] >= min_profit and r["liquidity"] >= min_listings][:3000]
+    res["age"] = time.time() - p.loaded_at
+    return res
+
+
+@app.get("/api/divcards")
+async def divcards_api():
+    from . import chest, divcards
+    from .snapshot import STASH_FILE
+    _need_league()
+    p = state["prices"]
+    await p.refresh(cfg().league)
+    try:
+        cards = await divcards.fetch_wiki(cfgmod.CONFIG_DIR / "divcards_wiki.json")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Không tải được danh sách bài từ poewiki.net: {e}")
+    owned: dict[str, int] = {}
+    for it in chest.load(STASH_FILE, cfg().league).get("items", []):
+        if it.get("frame") == 6:
+            owned[it["typeLine"]] = owned.get(it["typeLine"], 0) + int(it.get("qty") or 1)
+    res = divcards.analyse(p, cards, owned)
+    res["age"] = time.time() - p.loaded_at
+    return res
+
+
+@app.get("/api/chest")
+async def chest_api(junk_max: float = 1, include_stack: bool = False, recipe_max: float = 5):
+    from . import chest
+    from .snapshot import STASH_FILE
+    data = chest.load(STASH_FILE, cfg().league)
+    items = data.get("items", [])
+    return {"ts": data.get("ts"), "count": len(items), "recipe": chest.recipe(items, recipe_max),
+            "junk": chest.junk(items, junk_max, include_stack),
+            "names": sorted({(i["label"], i["name"] + " " + i["typeLine"]) for i in items if i["total"] >= junk_max})}
+
+
+@app.get("/api/calc/anoint")
+async def calc_anoint():
+    from . import anoint
+    _need_league()
+    p = state["prices"]
+    await p.refresh(cfg().league)
+    try:
+        rows = await anoint.fetch(cfgmod.CONFIG_DIR / "anoints_wiki.json")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Không tải được công thức anoint từ poewiki.net: {e}")
+    oils = sorted({o for r in rows for o in r["oils"]})
+    return {"anoints": rows, "oil_prices": {o: p.stack.get(o) for o in oils}, "divine": p.divine}
+
+
+@app.get("/api/calc/prices")
+async def calc_prices():
+    p = state["prices"]
+    if cfg().league:
+        await p.refresh(cfg().league)
+    names = ["Chromatic Orb", "Orb of Fusing", "Jeweller's Orb", "Vaal Orb", "Gemcutter's Prism", "Divine Orb"]
+    return {n: p.stack.get(n) for n in names}
+
+
+# ---------------- challenge tracker ----------------
+def _ch_path():
+    return cfgmod.CONFIG_DIR / "challenges.json"
+
+
+async def _ch_guide() -> tuple[list[dict], str]:
+    """Community guide (CraniumViolence) parsed, with poe.ninja prices filled in; [] if offline."""
+    from . import challenges as ch
+    p = state["prices"]
+    try:
+        if cfg().league:
+            await p.refresh(cfg().league)
+    except Exception:  # noqa: BLE001
+        pass
+
+    def price_of(name):
+        if name in p.stack:
+            return p.stack[name]
+        vals = [float(l.get("chaosValue") or 0) for (n, _b), ls in p.uniques.items() if n == name for l in ls if not l.get("links")]
+        return min(vals) if vals else None
+    try:
+        txt = await ch.fetch_guide(cfgmod.CONFIG_DIR / "challenges_guide.json")
+        return ch.parse_guide(txt, price_of, p.divine), ""
+    except Exception as e:  # noqa: BLE001
+        return [], f"Không tải được hướng dẫn: {e}"
+
+
+async def _ch_view(d) -> dict:
+    from . import challenges as ch
+    guide, err = await _ch_guide()
+    return {**ch.view(d, guide), "url": ch.profile_url(cfg().account_name or ""), "guide_error": err,
+            "guide_site": ch.GUIDE_SITE}
+
+
+@app.get("/api/challenges")
+async def ch_get():
+    from . import challenges as ch
+    return await _ch_view(ch.load(_ch_path(), cfg().league))
+
+
+@app.post("/api/challenges/sync")
+async def ch_sync():
+    from . import challenges as ch
+    _need_league()
+    try:
+        html = await ch.fetch(cfg().account_name or "", cfg().poesessid)
+        d = ch.merge_sync(ch.load(_ch_path(), cfg().league), ch.parse_html(html), "tự động")
+    except (RuntimeError, ValueError, httpx.HTTPError) as e:
+        raise HTTPException(502, str(e))
+    ch.save(_ch_path(), cfg().league, d)
+    return await _ch_view(d)
+
+
+@app.post("/api/challenges/paste")
+async def ch_paste(body: dict):
+    from . import challenges as ch
+    _need_league()
+    try:
+        d = ch.merge_sync(ch.load(_ch_path(), cfg().league), ch.parse_html(body.get("html") or ""), "dán tay")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    ch.save(_ch_path(), cfg().league, d)
+    return await _ch_view(d)
+
+
+@app.post("/api/challenges/item")
+async def ch_item(body: dict):
+    """body: {id, note?, star?, done? (true/false, or null = follow the profile page)}"""
+    from . import challenges as ch
+    d = ch.load(_ch_path(), cfg().league)
+    cid = body.get("id")
+    if "note" in body:
+        if body["note"]:
+            d["notes"][cid] = str(body["note"])[:2000]
+        else:
+            d["notes"].pop(cid, None)
+    if "star" in body:
+        d["stars"] = [x for x in d["stars"] if x != cid] + ([cid] if body["star"] else [])
+    if "done" in body:
+        if body["done"] is None:
+            d["manual"].pop(cid, None)
+        else:
+            d["manual"][cid] = bool(body["done"])
+    if "step" in body:     # {id, step: "<step text>", step_done: true/false/null}
+        from .challenges import _norm
+        k = f"{cid}|{_norm(str(body['step']))}"
+        if body.get("step_done") is None:
+            d["step_manual"].pop(k, None)
+        else:
+            d["step_manual"][k] = bool(body["step_done"])
+    if "milestones" in body:
+        d["milestones"] = [int(x) for x in body["milestones"] if str(x).isdigit()]
+    ch.save(_ch_path(), cfg().league, d)
+    return await _ch_view(d)
 
 
 # ---------------- regex helpers ----------------

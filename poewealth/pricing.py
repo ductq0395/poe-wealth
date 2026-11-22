@@ -139,6 +139,11 @@ class Prices:
             v = self.stack.get(type_line) or self.stack.get(base) or 0.0
             return v, "divination" if ft == 6 else "currency"
 
+        # non-stackable normal items poe.ninja prices by name: Invitations (Polaric/Incandescent…),
+        # fragments, memories, incubators… (they have no stackSize, so the check above misses them)
+        if ft == 0 and (type_line in self.stack or base in self.stack):
+            return self.stack.get(type_line) or self.stack.get(base) or 0.0, "currency"
+
         if ft in (3, 9, 10):  # unique / relic / foil
             lines = self.uniques.get((name, base), [])
             want_relic = ft in (9, 10)

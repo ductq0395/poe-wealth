@@ -12,6 +12,11 @@ from .db import DB
 from .poeapi import PoeClient
 from .pricing import Prices, _prop_int, is_timeless, iter_items, max_links
 from .timeless import TimelessPricer, mod_lines
+from . import chest, mercenary
+from .config import CONFIG_DIR
+
+WARRANT_FILE = CONFIG_DIR / "warrants.json"
+STASH_FILE = CONFIG_DIR / "stash_items.json"     # light copy of tracked tab items (Dọn rương, Bài div)
 
 progress = {"running": False, "message": "", "error": ""}
 _lock = asyncio.Lock()
@@ -112,6 +117,8 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
         try:
             await prices.refresh(cfg.league)
             sources, all_rows, queue = [], [], []
+            warrants: list[dict] = []
+            inventory: list[dict] = []
 
             if cfg.tab_ids:
                 progress["message"] = "Lấy danh sách tab…"
@@ -123,6 +130,8 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
                         continue
                     progress["message"] = base_msg["m"] = f"Tab {n}/{len(cfg.tab_ids)}: {t['n']}"
                     items = await client.stash_items(t["i"])
+                    warrants += mercenary.collect_warrants(items, f"tab:{tid}", t["n"])
+                    inventory += [chest.light_item(it, f"tab:{tid}", t["n"], prices) for it in items]
                     rows, q = price_items(items, f"tab:{tid}", cfg, prices, timeless)
                     sources.append({"source": f"tab:{tid}", "label": t["n"], "value": sum(r["total"] for r in rows),
                                     "count": len(items)})
@@ -137,6 +146,7 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
                         continue
                     progress["message"] = base_msg["m"] = f"Nhân vật {c['name']}"
                     items = await client.character_items(c["name"])
+                    warrants += mercenary.collect_warrants(items, f"char:{c['name']}", c["name"])
                     rows, q = price_items(items, f"char:{c['name']}", cfg, prices, timeless)
                     sources.append({"source": f"char:{c['name']}", "label": f"🧍 {c['name']}",
                                     "value": sum(r["total"] for r in rows), "count": len(items)})
@@ -144,6 +154,11 @@ async def take_snapshot(cfg: Config, db: DB, prices: Prices, timeless: TimelessP
                     queue += q
 
             sid = db.save_snapshot(cfg.league, prices.divine, sources, all_rows)
+            try:
+                mercenary.save_stash(WARRANT_FILE, cfg.league, warrants, time.time(), sid)
+                chest.save(STASH_FILE, cfg.league, inventory, time.time())
+            except Exception:  # noqa: BLE001 – the warrant list must not break a snapshot
+                logging.getLogger("poewealth").exception("lưu danh sách warrant lỗi")
             for it in queue:
                 timeless.enqueue(cfg.league, it)
             msg = f"Xong snapshot #{sid}"

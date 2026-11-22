@@ -19,6 +19,13 @@
   main { padding:20px 24px; max-width:1400px; }
   main.wide { max-width:none; }
   button.btn.sm { padding:3px 9px; font-size:12px; white-space:nowrap; }
+  .ov-wrap { display:grid; grid-template-columns:minmax(0,1400px); gap:16px; align-items:start; }
+  .ov-main { min-width:0; }
+  #farmCard { margin-bottom:0; }
+  @media (min-width:1950px) {
+    .ov-wrap { grid-template-columns:minmax(0,1400px) minmax(480px,820px); }
+    #farmCard { position:sticky; top:12px; max-height:calc(100vh - 24px); overflow:auto; }
+  }
   .tf-wrap { display:grid; grid-template-columns:1fr; gap:16px; align-items:start; }
   .tf-wrap > .card { margin-bottom:0; min-width:0; }
   #tfFrame { width:100%; height:calc(100vh - 190px); min-height:600px; }
@@ -78,15 +85,22 @@
   <button data-s="alerts">Cảnh báo giá <span id="alBadge" class="pill" style="display:none;background:#5a2a2a;color:#f0c8c8"></span></button>
   <button data-s="timeless">Timeless</button>
   <button data-s="finder">Timeless finder <span class="pill" style="font-size:10px">beta</span></button>
-  <button data-s="farm">Phiên farm</button>
+  <button data-s="merc">Mercenary <span class="pill" style="font-size:10px">beta</span></button>
   <button data-s="flip">Flip <span class="pill" style="font-size:10px">beta</span></button>
+  <button data-s="chal">Challenge</button>
+  <button data-s="gems">Gem</button>
+  <button data-s="divs">Bài div</button>
+  <button data-s="chest">Dọn rương</button>
+  <button data-s="calc">Máy tính</button>
   <button data-s="regex">Regex</button>
   <button data-s="patch">Patch game</button>
   <button data-s="settings">Cài đặt</button>
 </nav>
-<main>
+<main class="wide">
   <section id="overview" class="on">
-    <div class="card"><div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+    <div class="ov-wrap">
+    <div class="ov-main">
+    <div class="card" ><div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
       <b>Net worth theo thời gian</b>
       <select id="unit" onchange="drawChart()"><option value="div">divine</option><option value="c">chaos</option></select>
       <span class="muted" id="rate"></span></div>
@@ -94,6 +108,31 @@
     <div class="row">
       <div class="card"><b>Theo tab / nhân vật</b><table id="sources"></table></div>
       <div class="card"><b>Top item</b><table id="topItems"></table></div>
+    </div>
+    </div>
+    <div class="card" id="farmCard">
+      <b>Phiên farm</b> <span class="muted" style="font-size:12px">– bắt đầu/dừng đều tự chụp snapshot, lời ròng = cuối − đầu − chi phí</span>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <input id="sessName" placeholder="Tên phiên (vd: Breach T16)" style="flex:1;min-width:0">
+        <button class="btn gold" id="startBtn" onclick="sessStart()">Bắt đầu</button>
+        <button class="btn" id="stopBtn" onclick="sessStop()">Dừng</button>
+      </div>
+      <div style="margin-top:8px"><table id="sessTable"></table></div>
+      <div id="costCard" style="display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <div style="display:flex;align-items:center;gap:8px"><b id="costTitle" style="flex:1"></b>
+          <button class="btn sm" onclick="$('costCard').style.display='none'">Đóng</button></div>
+        <p class="muted" style="font-size:12px;margin:4px 0 8px">Món đã bỏ vào map (scarab, map, sextant, astrolabe…). Đơn giá để trống = giá poe.ninja lúc lưu.</p>
+        <table id="costTable"></table>
+        <datalist id="costNames"></datalist>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" onclick="costAdd()">+ Thêm dòng</button>
+          <div style="flex:1"></div><span id="costSum" class="muted"></span><button class="btn sm gold" onclick="costSave()">Lưu</button></div>
+      </div>
+      <div id="diffCard" style="display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <div style="display:flex;align-items:center;gap:8px"><b id="diffTitle" style="flex:1"></b>
+          <button class="btn sm" onclick="$('diffCard').style.display='none'; document.querySelectorAll('#sessTable tr').forEach(r => r.classList.remove('sel'))">Đóng</button></div>
+        <div><table id="diffTable"></table></div>
+      </div>
+    </div>
     </div>
   </section>
 
@@ -214,18 +253,43 @@
     </div>
   </section>
 
-  <section id="farm">
-    <div class="card">
-      <div style="display:flex;gap:10px;align-items:center">
-        <input id="sessName" placeholder="Tên phiên (vd: Breach T16)">
-        <button class="btn gold" id="startBtn" onclick="sessStart()">Bắt đầu</button>
-        <button class="btn" id="stopBtn" onclick="sessStop()">Dừng</button>
-        <span class="muted">Bắt đầu/dừng đều tự chụp snapshot. Lời = snapshot cuối − đầu.</span>
+  <section id="merc">
+    <div class="row" style="align-items:flex-start">
+    <div class="card" style="flex:0 0 380px;min-width:300px">
+      <b style="font-size:16px">Mercenary Warrant</b>
+      <p class="muted" style="margin:6px 0 0">Rê chuột vào warrant trong game, bấm <b>Ctrl+C</b> rồi dán vào đây.</p>
+      <textarea id="mcText" rows="14" style="width:100%;margin-top:8px;background:#111217;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px/1.4 ui-monospace,monospace"
+        placeholder="Item Class: Map Fragments&#10;Rarity: Normal&#10;Mercenary Warrant&#10;--------&#10;..." onpaste="setTimeout(mcParse, 0)"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <button class="btn" onclick="mcParse()">Đọc warrant</button>
+        <label style="margin:0">Level ≥ <input id="mcLvl" type="number" min="0" max="100" style="width:60px" value="83"></label>
       </div>
-      <table id="sessTable" style="margin-top:12px"></table>
+      <p class="muted" style="font-size:12px;margin:10px 0 0">Mỗi skill tick ở bên phải = 1 nhóm <b>Mercenary Skill Group</b> trên trade (support phải nằm trên đúng skill đó).
+        Giá = trung bình 5 listing <b>Instant Buyout</b> rẻ nhất (quy ra chaos, làm tròn xuống), chỉ tính listing đạt level tối thiểu – trade site không lọc được level nên tool lọc trên 30 listing rẻ nhất.
+        Tick nhiều support/nhiều skill thường không còn listing và trade có thể báo "query quá phức tạp".</p>
     </div>
-    <div class="card" id="diffCard" style="display:none"><b id="diffTitle"></b><table id="diffTable"></table></div>
+    <div class="card" style="flex:1;min-width:480px">
+      <div id="mcHead" class="muted">Chưa có warrant.</div>
+      <div id="mcSkills" style="margin-top:10px"></div>
+      <div id="mcActions" style="display:none;margin-top:12px;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn gold" id="mcBtn" onclick="mcPrice()">Check giá</button>
+        <button class="btn" onclick="mcPrice(true)">Check lại (bỏ cache)</button>
+        <button class="btn" onclick="mcTrade()">Xem trên trade</button>
+        <span id="mcState" class="muted"></span>
+      </div>
+      <div id="mcResult" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="mcStashCard" style="flex:0 0 560px;min-width:360px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <b>Warrant trong hòm đồ</b><div style="flex:1"></div>
+        <input id="mcFind" placeholder="🔍 lọc tên / build / skill…" oninput="mcStashRender()" style="width:200px">
+      </div>
+      <div id="mcStashInfo" class="muted" style="font-size:12px;margin-top:4px"></div>
+      <table id="mcStash" style="margin-top:8px"></table>
+    </div>
+    </div>
   </section>
+
 
   <section id="flip">
     <div class="card">
@@ -248,6 +312,141 @@
         Công cụ không đặt lệnh hộ. Tỉ lệ gợi ý làm tròn theo giá thị trường; đặt lệch chút về phía có lợi thì lời hơn nhưng khớp chậm hơn.</p>
     </div>
     <div class="card"><table id="flTable"></table></div>
+  </section>
+
+
+
+  <section id="chal">
+    <div class="card">
+      <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+        <div><div class="muted">Challenge</div><div class="big" id="clCount">–</div></div>
+        <div style="flex:1;min-width:320px">
+          <div id="clBar" style="position:relative;height:14px;background:#111217;border:1px solid var(--line);border-radius:7px;overflow:visible"></div>
+          <div id="clNext" class="muted" style="font-size:13px;margin-top:8px"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn gold" id="clSyncBtn" onclick="clSync()">Đồng bộ</button>
+          <button class="btn" onclick="$('clPasteBox').style.display = $('clPasteBox').style.display === 'none' ? '' : 'none'">Dán nguồn trang</button>
+          <a id="clLink" class="btn" target="_blank" style="text-decoration:none;color:var(--text);background:#2a2d36;border:1px solid #3a3e4a;border-radius:6px;padding:7px 14px">Mở trang challenge</a>
+        </div>
+      </div>
+      <div id="clState" class="muted" style="font-size:12px;margin-top:8px"></div>
+      <div id="clPasteBox" style="display:none;margin-top:10px">
+        <p class="muted" style="font-size:12px;margin:0 0 6px">Khi Cloudflare chặn đồng bộ tự động: mở trang challenge trong trình duyệt (đã đăng nhập), bấm <b>Ctrl+U</b> để xem nguồn trang, <b>Ctrl+A</b>, <b>Ctrl+C</b>, rồi dán vào đây.</p>
+        <textarea id="clPaste" rows="5" style="width:100%;background:#111217;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px ui-monospace,monospace" placeholder="<!DOCTYPE html> …"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px"><button class="btn gold" onclick="clPaste()">Đọc</button>
+          <label style="margin:0 0 0 auto">Mốc phần thưởng <input id="clMs" style="width:120px" onchange="clMs()"></label></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="seg" id="clFilter"><button class="on" data-f="todo">Chưa xong</button><button data-f="star">★ Ưu tiên</button><button data-f="done">Đã xong</button><button data-f="all">Tất cả</button></div>
+        <input id="clFind" placeholder="🔍 tên / nội dung / ghi chú…" oninput="clRender()" style="width:260px">
+        <span class="muted" style="font-size:12px;margin-left:6px">Độ khó:</span><div id="clDiffs" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div id="clList" style="margin-top:10px;columns:520px;column-gap:10px"></div>
+    </div>
+  </section>
+
+  <section id="gems">
+    <div class="card">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:16px">Lời từ gem</b>
+        <div class="seg" id="gmKind">
+          <button class="on" data-k="">Tất cả</button><button data-k="level">Lên level</button><button data-k="quality">Quality</button>
+          <button data-k="vaal">Vaal (corrupt)</button><button data-k="transfigure">Transfigure (Lab)</button></div>
+        <input id="gmFind" placeholder="🔍 tên gem…" oninput="gmRender()" style="width:200px">
+        <label style="margin:0">Listing ≥ <input id="gmLc" type="number" min="0" value="5" style="width:60px" onchange="gmRender()"></label>
+        <label style="margin:0">Lời ≥ <input id="gmMin" type="number" min="0" value="10" style="width:70px" onchange="gmRender()"> c</label>
+        <div style="flex:1"></div><span id="gmState" class="muted"></span><button class="btn" onclick="gmLoad(true)">Làm mới</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Giá poe.ninja (trễ tới 30 phút). <b>Listing</b> = số listing ít hơn của 2 phía mua/bán – thấp là khó mua/khó bán.
+        Vaal = giá trị kỳ vọng ước tính (50% giữ nguyên, 12.5% +1 level, 12.5% −1 level, 12.5% lên 23%, 12.5% giảm quality), chỉ để tham khảo.
+        Transfigure cần 1 lần chạy Lab tới Divine Font. Lên level không tính thời gian/xp bỏ ra.</p>
+    </div>
+    <div class="card"><table id="gmTable"></table></div>
+  </section>
+
+  <section id="divs">
+    <div class="card">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:16px">Bài div: bán cả bộ hay đổi?</b>
+        <input id="dvFind" placeholder="🔍 tên bài / phần thưởng…" oninput="dvRender()" style="width:240px">
+        <label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" id="dvOwned" onchange="dvRender()"> Chỉ bài có trong hòm</label>
+        <label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" id="dvPriced" checked onchange="dvRender()"> Chỉ bài định giá được</label>
+        <div style="flex:1"></div><span id="dvState" class="muted"></span><button class="btn" onclick="dvLoad(true)">Làm mới</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Phần thưởng + số lá/bộ lấy từ poewiki.net (nhớ 7 ngày), giá từ poe.ninja.
+        Lời &gt; 0 = đổi bài lợi hơn bán cả bộ; &lt; 0 = bán bài lợi hơn. Unique corrupted / có link tính theo giá bản thường; phần thưởng ngẫu nhiên không định giá.
+        "Có trong hòm" theo snapshot gần nhất (chỉ tab đang theo dõi).</p>
+    </div>
+    <div class="card"><table id="dvTable"></table></div>
+  </section>
+
+  <section id="chest">
+    <div class="row" style="align-items:flex-start">
+      <div class="card" style="flex:0 0 560px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:16px">Chaos recipe</b><div style="flex:1"></div>
+          <label style="margin:0">Bỏ qua rare giá &gt; <input id="chRecMax" type="number" min="0" value="5" style="width:60px" onchange="chLoad()"> c</label></div>
+        <div id="chRecipe" style="margin-top:10px"></div>
+        <p class="muted" style="font-size:12px;margin:8px 0 0">Bộ = vũ khí (1 tay 2 tay, hoặc 2 vũ khí 1 tay, hoặc 1 tay + khiên) + mũ + giáp + găng + giày + đai + dây chuyền + 2 nhẫn, đều là rare ilvl ≥ 60.
+          Mỗi bộ cần ít nhất 1 món ilvl 60–74 (thiếu món 60–74 thì bộ đó không đổi được). Cả bộ chưa identify = 2 chaos. Loại món theo icon của item.</p>
+      </div>
+      <div class="card" style="flex:1;min-width:520px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <b style="font-size:16px">Đồ rác</b>
+          <label style="margin:0">Giá trị &lt; <input id="chJunk" type="number" min="0" step="0.5" value="1" style="width:60px" onchange="chLoad()"> c</label>
+          <label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" id="chStack" onchange="chLoad()"> Tính cả currency/bài div rẻ</label>
+          <label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" id="chNoRecipe" checked onchange="chRender()"> Ẩn rare dùng được cho recipe</label>
+          <select id="chTab" onchange="chRender()"></select>
+          <div style="flex:1"></div><span id="chState" class="muted"></span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:flex-start">
+          <code id="chRx" style="flex:1;display:block;background:#111217;border:1px solid var(--line);border-radius:6px;padding:8px;word-break:break-all;font-size:13px"></code>
+          <button class="btn gold" onclick="chCopy()">Copy regex</button>
+        </div>
+        <p id="chRxHint" class="muted" style="font-size:12px;margin:6px 0 0"></p>
+        <table id="chTable" style="margin-top:8px"></table>
+      </div>
+    </div>
+  </section>
+
+  <section id="calc">
+    <div class="row" style="align-items:flex-start">
+      <div class="card" style="flex:1;min-width:440px">
+        <b style="font-size:16px">Vorici – màu socket</b>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">
+          <div><label style="margin-top:0">Số socket</label><input id="vcS" type="number" min="1" max="6" value="6" style="width:60px"></div>
+          <div><label style="margin-top:0">Str</label><input id="vcStr" type="number" min="0" value="0" style="width:70px"></div>
+          <div><label style="margin-top:0">Dex</label><input id="vcDex" type="number" min="0" value="0" style="width:70px"></div>
+          <div><label style="margin-top:0">Int</label><input id="vcInt" type="number" min="0" value="0" style="width:70px"></div>
+          <div><label style="margin-top:0;color:#d9645b">Đỏ</label><input id="vcR" type="number" min="0" max="6" value="0" style="width:55px"></div>
+          <div><label style="margin-top:0;color:#6fbf73">Xanh lá</label><input id="vcG" type="number" min="0" max="6" value="0" style="width:55px"></div>
+          <div><label style="margin-top:0;color:#5b8fd9">Xanh dương</label><input id="vcB" type="number" min="0" max="6" value="0" style="width:55px"></div>
+          <div><label style="margin-top:0">Giá Chromatic (c)</label><input id="vcPrice" type="number" min="0" step="0.01" style="width:80px"></div>
+        </div>
+        <div id="vcOut" style="margin-top:10px"></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">Công thức của máy tính Siveran (1 chỉ số: màu đúng 0.9·(R+10)/(R+20); 2 chỉ số: 0.9·R1/(R1+R2), màu còn lại 10%). Giá bench theo bảng 3.x – nên đối chiếu trong game.</p>
+      </div>
+      <div class="card" style="flex:0 0 440px">
+        <b style="font-size:16px">Fusing – link</b>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:flex-end">
+          <div><label style="margin-top:0">Số socket</label><select id="fuS"><option>6</option><option>5</option></select></div>
+          <div><label style="margin-top:0">Muốn</label><select id="fuL"><option value="6">6 link</option><option value="5">≥ 5 link</option></select></div>
+          <div><label style="margin-top:0">Giá Fusing (c)</label><input id="fuPrice" type="number" min="0" step="0.01" style="width:80px"></div>
+          <div><label style="margin-top:0">Đang có (fusing)</label><input id="fuHave" type="number" min="0" value="500" style="width:80px"></div>
+        </div>
+        <div id="fuOut" style="margin-top:10px"></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">Tỉ lệ mỗi lần fusing là số liệu cộng đồng ước tính (item 20% quality): 6S→6L ≈ 1/1100, 6S→≥5L ≈ 1/80, 5S→5L ≈ 1/160. Bench: 5L = 150, 6L = 1500 fusing.</p>
+      </div>
+      <div class="card" style="flex:1;min-width:520px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:16px">Anoint (oil)</b>
+          <input id="anFind" placeholder="🔍 tên notable / chỉ số / tên oil…" oninput="anRender()" style="flex:1;min-width:200px">
+          <select id="anSort" onchange="anRender()"><option value="name">Theo tên</option><option value="cost">Rẻ nhất</option><option value="-cost">Đắt nhất</option></select></div>
+        <p id="anState" class="muted" style="font-size:12px;margin:6px 0 0"></p>
+        <div style="max-height:calc(100vh - 260px);overflow:auto;margin-top:6px"><table id="anTable"></table></div>
+      </div>
+    </div>
   </section>
 
   <section id="regex">
@@ -370,6 +569,7 @@ const divRate = () => (LATEST?.snapshot?.divine_rate) || 0;
 function fmt(c, forceChaos) {
   const d = divRate();
   if (!forceChaos && d && Math.abs(c) >= d) return (c / d).toFixed(2) + " div";
+  if (Math.abs(c) < 10 && Math.abs(c - Math.round(c)) >= 0.05) return c.toFixed(1) + " c";
   return Math.round(c).toLocaleString() + " c";
 }
 const img = u => u ? `<img src="${esc(u)}" loading="lazy">` : "";
@@ -378,13 +578,19 @@ const when = ts => new Date(ts * 1000).toLocaleString("vi-VN");
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("on"));
   b.classList.add("on"); $(b.dataset.s).classList.add("on");
-  document.querySelector("main").classList.toggle("wide", b.dataset.s === "finder");
-  if (b.dataset.s === "farm") loadSessions();
+  document.querySelector("main").classList.toggle("wide", ["finder", "merc", "overview", "calc", "chal"].includes(b.dataset.s));
+  if (b.dataset.s === "overview") loadSessions();
   if (b.dataset.s === "patch") loadPatch();
   if (b.dataset.s === "regex") rxTab(RX.tab);
   if (b.dataset.s === "alerts") loadAlerts().then(renderAlerts);
   if (b.dataset.s === "flip") flLoad();
   if (b.dataset.s === "finder") tfLoad();
+  if (b.dataset.s === "gems") gmLoad();
+  if (b.dataset.s === "chal") clLoad();
+  if (b.dataset.s === "divs") dvLoad();
+  if (b.dataset.s === "chest") chLoad();
+  if (b.dataset.s === "calc") calcLoad();
+  if (b.dataset.s === "merc") { setTimeout(() => $("mcText").focus(), 0); mcStashLoad(); }
 });
 
 // ---------- data ----------
@@ -666,6 +872,424 @@ async function tfResults() {
         <button class="btn sm" onclick="tlTrade('${esc(jewel)}', '${esc(conq)}', ${x.seed})">Xem trên trade</button>
         <button class="btn sm" onclick="tfOpen('${esc(jewel)}', '${esc(conq === "*" ? TF.jewels[jewel][0] : conq)}', ${x.seed})">Xem trên cây</button></div></td></tr>`).join("");
   return r;
+}
+
+// ---------- mercenary warrant (beta) ----------
+let MC = null, MC_LAST = null;
+async function mcParse() {
+  const text = $("mcText").value.trim(); if (!text) return;
+  try { MC = await post("/api/merc/parse", { text }); }
+  catch (e) { $("mcHead").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  MC.sel = {};   // skill index -> {on, sups:Set(index)}
+  $("mcHead").innerHTML = `<b style="font-size:16px;color:var(--text)">${esc(MC.name || "Mercenary")}</b>
+    <span class="pill">${esc(MC.build || "?")}</span> <span class="pill">Level ${MC.level ?? "?"}</span>
+    <span class="muted" style="margin-left:6px">Tick skill (bắt buộc) + support (tùy chọn) muốn tìm</span>`;
+  $("mcActions").style.display = "flex"; $("mcResult").innerHTML = ""; MC_LAST = null;
+  mcRender();
+}
+function mcRender() {
+  $("mcSkills").innerHTML = MC.skills.map((sk, i) => {
+    const sel = MC.sel[i] || { on: false, sups: new Set() };
+    const bad = !sk.id;
+    return `<div style="background:#16171c;border-radius:6px;padding:8px 10px;margin-bottom:6px;${sel.on ? "outline:1px solid var(--gold)" : ""}">
+      <label style="margin:0;display:flex;gap:8px;align-items:center;color:var(--text);font-size:14px">
+        <input type="checkbox" ${sel.on ? "checked" : ""} ${bad ? "disabled" : ""} onchange="mcToggle(${i}, -1, this.checked)">
+        <b>${esc(sk.name)}</b>${bad ? ` <span class="err" style="font-size:12px">không tìm thấy trên trade</span>` : ""}
+        ${sk.alt_ids?.length ? `<span class="muted" style="font-size:11px">(có ${sk.alt_ids.length + 1} skill trùng tên, dùng cái đầu)</span>` : ""}</label>
+      ${sk.supports.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 0 24px">` + sk.supports.map((x, j) =>
+        `<label style="margin:0;display:flex;gap:5px;align-items:center;color:${x.id ? "var(--text)" : "var(--red)"};background:#1d1f26;padding:3px 8px;border-radius:5px;font-size:12px">
+          <input type="checkbox" ${sel.sups.has(j) ? "checked" : ""} ${x.id ? "" : "disabled"} onchange="mcToggle(${i}, ${j}, this.checked)">
+          ${esc(x.name)} <span class="muted">T${x.tier}</span></label>`).join("") + `</div>`
+        : `<div class="muted" style="font-size:12px;margin:4px 0 0 24px">không có support</div>`}
+    </div>`;
+  }).join("");
+}
+function mcToggle(i, j, on) {
+  const sel = MC.sel[i] || (MC.sel[i] = { on: false, sups: new Set() });
+  if (j < 0) sel.on = on;
+  else { on ? sel.sups.add(j) : sel.sups.delete(j); if (on) sel.on = true; }
+  mcRender();
+}
+function mcGroups() {
+  return Object.entries(MC.sel).filter(([, v]) => v.on).map(([i, v]) => ({
+    skill: MC.skills[i].id, supports: [...v.sups].map(j => MC.skills[i].supports[j].id).filter(Boolean) }));
+}
+function mcQuery(groups) {   // same as mercenary.build_query on the server
+  return { query: { status: { option: "securable" }, type: "Mercenary Warrant",
+      stats: groups.map(g => ({ type: "mercenary", filters: [{ id: g.skill }, ...g.supports.map(id => ({ id }))] })),
+      filters: { trade_filters: { filters: { sale_type: { option: "priced" } } } } }, sort: { price: "asc" } };
+}
+function mcTrade() {
+  if (!MC) return; const g = mcGroups(); if (!g.length) return alert("Chưa tick skill nào");
+  window.open(`https://www.pathofexile.com/trade/search/${encodeURIComponent(CFG.league || "Standard")}?q=${encodeURIComponent(JSON.stringify(mcQuery(g)))}`, "_blank");
+}
+async function mcPrice(force) {
+  if (!MC) return; const groups = mcGroups(); if (!groups.length) return alert("Chưa tick skill nào");
+  $("mcBtn").disabled = true; $("mcState").textContent = "Đang tìm trên trade… (có thể phải chờ rate limit nếu Timeless đang check)";
+  try {
+    const r = MC_LAST = await post("/api/merc/price", { groups, min_level: +$("mcLvl").value || 0, force: !!force });
+    $("mcState").textContent = r.cached ? `Kết quả cache (${Math.round(r.age / 60)} phút trước)` : "";
+    const lv = r.min_level;
+    $("mcResult").innerHTML = `<div style="display:flex;gap:24px;align-items:baseline;flex-wrap:wrap">
+        <div><div class="muted">Giá ước tính</div><div class="big">${r.price > 0 ? fmt(r.price) : "0"}</div></div>
+        <div><div class="muted">Tổng listing buyout</div><div style="font-size:18px">${r.total.toLocaleString()}</div></div>
+        <div class="muted" style="font-size:12px">${esc(r.detail)}</div></div>` +
+      (r.listings.length ? `<table style="margin-top:10px"><tr><th class="num">Giá</th><th class="num">≈ chaos</th><th class="num">Level</th><th>Mercenary</th><th>Build</th><th>Người bán</th></tr>` +
+        r.listings.map(x => `<tr style="${(x.level || 0) < lv ? "opacity:.45" : ""}"><td class="num">${x.amount ?? ""} ${esc(x.currency || "")}</td>
+          <td class="num">${x.chaos ? Math.round(x.chaos) : "–"}</td><td class="num">${x.level ?? "?"}</td>
+          <td>${esc(x.name)}</td><td class="muted">${esc(x.build)}</td><td class="muted" style="font-size:12px">${esc(x.seller)}</td></tr>`).join("") + `</table>
+        <p class="muted" style="font-size:12px">Dòng mờ = dưới level ${lv}, không tính vào giá.</p>` : "");
+  } catch (e) { $("mcState").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  finally { $("mcBtn").disabled = false; }
+}
+
+// warrants seen in tracked tabs / characters at the last snapshot
+let MC_STASH = null;
+async function mcStashLoad() {
+  try { MC_STASH = await api("/api/merc/stash"); } catch (e) { $("mcStashInfo").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  mcStashRender();
+}
+function mcStashRender() {
+  const all = (MC_STASH && MC_STASH.warrants) || [];
+  $("mcStashInfo").textContent = MC_STASH && MC_STASH.ts
+    ? `${all.length} warrant · snapshot ${when(MC_STASH.ts)} · chỉ tab/nhân vật đang theo dõi`
+    : "Chưa có dữ liệu – bấm Snapshot để quét hòm đồ.";
+  const f = $("mcFind").value.trim().toLowerCase();
+  const list = all.map((w, i) => ({ ...w, i })).filter(w => !f ||
+      [w.name, w.build, w.label, ...(w.skills || []).map(s => s.name)].join(" ").toLowerCase().includes(f))
+    .sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || String(a.name).localeCompare(b.name));
+  if (!all.length) { $("mcStash").innerHTML = ""; return; }
+  $("mcStash").innerHTML = `<tr><th>Mercenary</th><th class="num">Lv</th><th>Ở đâu</th><th></th></tr>` +
+    list.map(w => `<tr title="${esc((w.skills || []).map(s => s.name).join(" · "))}">
+      <td><b>${esc(w.name || "?")}</b><div class="muted" style="font-size:12px">${esc(w.build || "")}</div>
+        <div class="muted" style="font-size:11px">${esc((w.skills || []).map(s => s.name).join(" · "))}</div></td>
+      <td class="num">${w.level ?? "?"}</td>
+      <td class="muted" style="font-size:12px;white-space:nowrap">${esc(w.label || "")}${w.x != null ? `<div title="cột, hàng trong tab">ô ${w.x + 1}, ${w.y + 1}</div>` : ""}</td>
+      <td><button class="btn sm" ${w.skills?.length ? "" : 'disabled title="Không có dữ liệu skill"'} onclick="mcStashCheck(${w.i})">Check</button></td></tr>`).join("");
+}
+function mcStashCheck(i) {
+  const w = MC_STASH.warrants[i];
+  $("mcText").value = w.text;
+  document.querySelectorAll("#mcStash tr").forEach(r => r.classList.remove("sel"));
+  event?.target?.closest("tr")?.classList.add("sel");
+  mcParse();
+}
+
+// ---------- challenge tracker ----------
+let CL = null, CL_F = "todo", CL_DSEL = new Set();   // selected difficulties (empty = all)
+const CL_DORDER = ["Very Easy", "Easy", "Average", "Hard", "Very Hard"];
+function clDiffToggle(d) { CL_DSEL.has(d) ? CL_DSEL.delete(d) : CL_DSEL.add(d); clRender(); }
+// which cards show their guide (default: hidden); remembered in this browser
+let CL_OPEN = new Set();
+try { CL_OPEN = new Set(JSON.parse(localStorage.getItem("clOpen") || "[]")); } catch { }
+function clToggle(id) {
+  CL_OPEN.has(id) ? CL_OPEN.delete(id) : CL_OPEN.add(id);
+  try { localStorage.setItem("clOpen", JSON.stringify([...CL_OPEN])); } catch { }
+  clRender();
+}
+const CL_DIFF = { "Very Easy": "background:#24361f;color:#b8e0a8", "Easy": "background:#2c3a1e;color:#cfe0a0",
+  "Average": "background:#3a3520;color:#e8d48a", "Hard": "background:#3a2a1e;color:#f0b88a", "Very Hard": "background:#3a1e1e;color:#f0a0a0" };
+// guide text: escape, then `code` and **bold**
+const clFmt = t => esc(t).replace(/`([^`]+)`/g, '<code style="background:#111217;padding:0 4px;border-radius:3px">$1</code>').replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+async function clStep(id, k, done) {
+  const it = CL.items.find(x => x.id === id); if (!it) return;
+  CL = { ...CL, ...(await post("/api/challenges/item", { id, step: it.steps[k].text, step_done: done })) }; clRender();
+}
+document.querySelectorAll("#clFilter button").forEach(b => b.onclick = () => {
+  CL_F = b.dataset.f; document.querySelectorAll("#clFilter button").forEach(x => x.classList.toggle("on", x === b)); clRender(); });
+async function clLoad() {
+  try { CL = await api("/api/challenges"); } catch (e) { $("clState").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  if (CL.url) $("clLink").href = CL.url;
+  clRender();
+}
+async function clSync() {
+  $("clSyncBtn").disabled = true; $("clState").textContent = "Đang tải trang challenge…";
+  try { CL = { ...CL, ...(await post("/api/challenges/sync")) }; clRender(); }
+  catch (e) { $("clState").innerHTML = `<span class="err">${esc(e.message)}</span>`; $("clPasteBox").style.display = ""; }
+  finally { $("clSyncBtn").disabled = false; }
+}
+async function clPaste() {
+  const html = $("clPaste").value; if (!html.trim()) return;
+  try { CL = { ...CL, ...(await post("/api/challenges/paste", { html })) }; $("clPaste").value = ""; $("clPasteBox").style.display = "none"; clRender(); }
+  catch (e) { $("clState").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+}
+async function clItem(id, body) { CL = { ...CL, ...(await post("/api/challenges/item", { id, ...body })) }; clRender(); }
+async function clMs() {
+  const ms = $("clMs").value.split(/[^0-9]+/).filter(Boolean).map(Number);
+  CL = { ...CL, ...(await post("/api/challenges/item", { id: "", milestones: ms })) }; clRender();
+}
+function clRender() {
+  if (!CL) return;
+  const tot = CL.total || 40;
+  $("clCount").textContent = CL.total ? `${CL.done}/${CL.total}` : "–";
+  $("clMs").value = (CL.milestones || []).join(", ");
+  $("clBar").innerHTML = `<div style="height:100%;width:${Math.min(100, CL.done / tot * 100)}%;background:var(--gold);border-radius:7px"></div>` +
+    (CL.milestones || []).map(m => `<div title="Mốc ${m}" style="position:absolute;left:${Math.min(100, m / tot * 100)}%;top:-4px;bottom:-4px;width:2px;background:${CL.done >= m ? "var(--green)" : "#8d8a80"}"></div>
+      <div style="position:absolute;left:${Math.min(100, m / tot * 100)}%;top:16px;transform:translateX(-50%);font-size:11px;color:${CL.done >= m ? "var(--green)" : "var(--muted)"}">${m}</div>`).join("");
+  $("clNext").innerHTML = !CL.total ? "Chưa có dữ liệu – bấm Đồng bộ (hoặc dán nguồn trang)." :
+    CL.next ? `Còn <b style="color:var(--text)">${CL.need}</b> challenge nữa tới mốc <b style="color:var(--text)">${CL.next}</b>` : "Đã qua mọi mốc phần thưởng 🎉";
+  $("clState").innerHTML = (CL.synced ? `Tiến độ cập nhật ${when(CL.synced)} (${esc(CL.source)})` : "Chưa đồng bộ – đang hiện danh sách từ guide, tick tay từng bước.") +
+    ` · Hướng dẫn: <a href="${esc(CL.guide_site || "#")}" target="_blank" class="muted">CraniumViolence</a> (CC BY-NC-SA 4.0)` +
+    (CL.guide_error ? ` · <span class="err">${esc(CL.guide_error)}</span>` : "");
+  const f = $("clFind").value.trim().toLowerCase();
+  const diffOf = i => i.guide?.difficulty || "Chưa rõ";
+  const inStatus = i => CL_F === "all" || (CL_F === "done" ? i.done : CL_F === "star" ? i.star : !i.done);
+  // difficulty chips with counts for the current status filter
+  const cnt = {}; CL.items.filter(inStatus).forEach(i => cnt[diffOf(i)] = (cnt[diffOf(i)] || 0) + 1);
+  const diffs = [...new Set(CL.items.map(diffOf))].sort((a, b) => (CL_DORDER.indexOf(a) + 1 || 99) - (CL_DORDER.indexOf(b) + 1 || 99));
+  $("clDiffs").innerHTML = diffs.map(d => { const on = CL_DSEL.has(d);
+    return `<button class="pill" style="cursor:pointer;border:1px solid ${on ? "var(--gold)" : "transparent"};${CL_DIFF[d] || ""};${CL_DSEL.size && !on ? "opacity:.45" : ""}" onclick="clDiffToggle('${esc(d)}')">${esc(d)} <span style="opacity:.7">${cnt[d] || 0}</span></button>`; }).join("") +
+    (CL_DSEL.size ? ` <a href="#" class="muted" style="font-size:12px" onclick="CL_DSEL.clear();clRender();return false">bỏ lọc</a>` : "");
+  let list = CL.items.filter(i => inStatus(i) && (!CL_DSEL.size || CL_DSEL.has(diffOf(i))) &&
+    (!f || [i.title, i.desc, i.note, ...i.steps.map(s => s.text)].join(" ").toLowerCase().includes(f)));
+  const ratio = i => i.progress && i.progress[1] ? i.progress[0] / i.progress[1] : 0;
+  list.sort((a, b) => (b.star - a.star) || (a.done - b.done) || (ratio(b) - ratio(a)) || ((a.guide?.num ?? 99) - (b.guide?.num ?? 99)) || a.title.localeCompare(b.title));
+  $("clList").innerHTML = list.length ? list.map(i => {
+    const p = i.progress, g = i.guide;
+    const nDone = i.steps.filter(s => s.done).length;
+    const pct = p && p[1] ? p[0] / p[1] * 100 : i.steps.length ? nDone / i.steps.length * 100 : (i.done ? 100 : 0);
+    const prog = p ? `${p[0]}/${p[1]}` : i.steps.length ? `${nDone}/${i.steps.length}` : "";
+    const id = esc(i.id), open = g && CL_OPEN.has(i.id);
+    const step = (s, k) => `<div style="margin:3px 0;${s.done ? "opacity:.55" : ""}">
+        <label style="margin:0;display:flex;gap:6px;align-items:flex-start;color:var(--text);font-size:13px">
+          <input type="checkbox" ${s.done ? "checked" : ""} onchange="clStep('${id}', ${k}, this.checked)">
+          <span style="${s.done ? "text-decoration:line-through" : ""}">${clFmt(s.text)}</span>
+          ${s.manual ? `<a href="#" class="muted" style="font-size:11px" title="Bỏ tick tay" onclick="clStep('${id}', ${k}, null);return false">↺</a>` : ""}</label>
+        ${open && !s.done && s.tips && s.tips.length ? (() => {
+          const body = s.tips.map(t => `<div style="padding-left:${(t.depth - 1) * 14}px">› ${clFmt(t.text)}</div>`).join("");
+          // long tip lists start folded so one card does not push the rest far down
+          return s.tips.length > 4
+            ? `<details style="margin:2px 0 4px 24px;font-size:12px;color:#b9b4a8"><summary class="muted">Mẹo (${s.tips.length} dòng)</summary>${body}</details>`
+            : `<div style="margin:2px 0 4px 24px;font-size:12px;color:#b9b4a8">${body}</div>`; })() : ""}
+      </div>`;
+    const undone = i.steps.map((s, k) => [s, k]).filter(([s]) => !s.done), dn = i.steps.map((s, k) => [s, k]).filter(([s]) => s.done);
+    return `<div style="break-inside:avoid;margin-bottom:10px;background:#16171c;border:1px solid ${i.star ? "var(--gold)" : "var(--line)"};border-radius:8px;padding:10px 12px;${i.done ? "opacity:.6" : ""}">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn sm" title="Ưu tiên" style="color:${i.star ? "var(--gold)" : "var(--muted)"}" onclick="clItem('${id}', {star: ${!i.star}})">${i.star ? "★" : "☆"}</button>
+        <b style="font-size:15px">${g ? `<span class="muted">${g.num}.</span> ` : ""}${esc(i.title)}</b>
+        ${g ? `<button class="btn sm" title="Mở/đóng hướng dẫn" style="${open ? "border-color:var(--gold);color:var(--gold)" : ""}" onclick="clToggle('${id}')">${open ? "▾ Guide" : "▸ Guide"}</button>` : ""}
+        <span style="flex:1"></span>
+        ${g && g.difficulty ? `<span class="pill" style="${CL_DIFF[g.difficulty] || ""}">${esc(g.difficulty)}</span>` : ""}
+        ${g ? g.tags.map(t => `<span class="pill">${esc(t)}</span>`).join("") : ""}
+        ${prog ? `<span class="${i.done ? "pos" : ""}">${prog}</span>` : ""}
+        <label style="margin:0;display:flex;gap:4px;align-items:center;font-size:12px" title="Tick tay cả challenge">
+          <input type="checkbox" ${i.done ? "checked" : ""} onchange="clItem('${id}', {done: this.checked})">xong</label>
+        ${i.manual ? `<a href="#" class="muted" style="font-size:11px" title="Bỏ tick tay" onclick="clItem('${id}', {done: null});return false">↺</a>` : ""}
+      </div>
+      <div style="height:4px;background:#111217;border-radius:2px;margin:6px 0"><div style="height:100%;width:${pct}%;background:${i.done ? "var(--green)" : "var(--gold)"};border-radius:2px"></div></div>
+      <div class="muted" style="font-size:12px">${g && g.req ? `<b style="color:var(--text)">${esc(g.req)}</b> · ` : ""}${clFmt(i.desc || (g && g.desc) || "")}</div>
+      <div style="margin-top:6px">${undone.map(([s, k]) => step(s, k)).join("")}</div>
+      ${dn.length ? `<details style="font-size:12px;margin-top:2px"><summary class="muted">Đã xong ${dn.length}</summary>${dn.map(([s, k]) => step(s, k)).join("")}</details>` : ""}
+      ${open && g.notes.length ? `<div style="font-size:12px;margin-top:6px;padding:6px 8px;background:#111217;border-radius:6px;color:#b9b4a8;white-space:pre-wrap">${g.notes.map(clFmt).join("\n")}</div>` : ""}
+      ${open ? `<div style="font-size:11px;margin-top:4px"><a href="${esc(g.anchor)}" target="_blank" class="muted">Mở trên trang guide ↗</a></div>` : ""}
+      <textarea rows="${i.note ? 2 : 1}" placeholder="Ghi chú của bạn" style="width:100%;margin-top:6px;background:#111217;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;resize:vertical"
+        onchange="clItem('${id}', {note: this.value})">${esc(i.note)}</textarea>
+    </div>`; }).join("") : `<div class="muted">Không có challenge nào.</div>`;
+}
+
+// ---------- gems ----------
+let GM = null, GM_KIND = "";
+document.querySelectorAll("#gmKind button").forEach(b => b.onclick = () => {
+  GM_KIND = b.dataset.k; document.querySelectorAll("#gmKind button").forEach(x => x.classList.toggle("on", x === b)); gmRender(); });
+async function gmLoad(force) {
+  if (GM && !force) return gmRender();
+  $("gmState").textContent = "Đang tải…";
+  try { GM = await api("/api/gems?min_profit=1&min_listings=1"); } catch (e) { $("gmState").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  $("gmState").textContent = `${GM.rows.length} cách có lời · giá cách đây ${Math.round(GM.age / 60)} phút`;
+  gmRender();
+}
+const GM_LABEL = { level: "Lên level", quality: "Quality", vaal: "Vaal", transfigure: "Transfigure" };
+function gmRender() {
+  if (!GM) return;
+  const f = $("gmFind").value.trim().toLowerCase(), lc = +$("gmLc").value || 0, mn = +$("gmMin").value || 0;
+  const list = GM.rows.filter(r => (!GM_KIND || r.kind === GM_KIND) && r.liquidity >= lc && r.profit >= mn &&
+    (!f || r.name.toLowerCase().includes(f) || r.target.toLowerCase().includes(f)));
+  if (!list.length) { $("gmTable").innerHTML = `<tr><td class="muted">Không có gem nào khớp bộ lọc.</td></tr>`; return; }
+  $("gmTable").innerHTML = `<tr><th></th><th>Gem</th><th>Cách</th><th>Mua</th><th>Bán</th><th class="num">Chi phí thêm</th><th class="num">Lời</th><th class="num">ROI</th><th class="num">Listing</th><th>Ghi chú</th></tr>` +
+    list.slice(0, 400).map(r => `<tr><td>${img(r.icon)}</td>
+      <td>${esc(r.name)}${r.target !== r.name ? ` → <b>${esc(r.target)}</b>` : ""}</td>
+      <td><span class="pill">${GM_LABEL[r.kind] || r.kind}</span></td>
+      <td>${esc(r.buy)} <span class="muted">${fmt(r.buy_price)}</span> <span class="muted" style="font-size:11px">(${r.buy_lc})</span></td>
+      <td>${esc(r.sell)} <span class="muted">${fmt(r.sell_price)}</span> <span class="muted" style="font-size:11px">(${r.sell_lc})</span></td>
+      <td class="num muted">${r.cost ? fmt(r.cost) : ""}</td>
+      <td class="num pos"><b>${fmt(r.profit)}</b></td><td class="num">${Math.round(r.roi * 100)}%</td>
+      <td class="num ${r.liquidity < 5 ? "neg" : "muted"}">${r.liquidity}</td>
+      <td class="muted" style="font-size:12px">${esc(r.note)}</td></tr>`).join("") +
+    (list.length > 400 ? `<tr><td colspan="10" class="muted">… còn ${list.length - 400} dòng, lọc thêm để xem.</td></tr>` : "");
+}
+
+// ---------- div cards ----------
+let DV = null;
+async function dvLoad(force) {
+  if (DV && !force) return dvRender();
+  $("dvState").textContent = "Đang tải (lần đầu lấy danh sách bài từ wiki ~5 giây)…";
+  try { DV = await api("/api/divcards"); } catch (e) { $("dvState").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  $("dvState").textContent = `${DV.rows.length} bài · giá cách đây ${Math.round(DV.age / 60)} phút`;
+  dvRender();
+}
+function dvRender() {
+  if (!DV) return;
+  const f = $("dvFind").value.trim().toLowerCase(), own = $("dvOwned").checked, pr = $("dvPriced").checked;
+  const list = DV.rows.filter(r => (!own || r.owned) && (!pr || r.profit != null) &&
+    (!f || r.name.toLowerCase().includes(f) || r.reward.toLowerCase().includes(f)));
+  $("dvTable").innerHTML = `<tr><th></th><th>Bài</th><th class="num">Lá/bộ</th><th class="num">Giá 1 lá</th><th class="num">Giá cả bộ</th><th>Phần thưởng</th><th class="num">Giá thưởng</th><th class="num">Đổi lời hơn bán</th><th class="num">Trong hòm</th><th>Ghi chú</th></tr>` +
+    list.slice(0, 500).map(r => {
+      const sets = r.owned ? Math.floor(r.owned / r.stack) : 0;
+      return `<tr style="${r.owned ? "background:#1f2418" : ""}"><td>${img(r.icon)}</td><td>${esc(r.name)}${r.drop ? "" : ' <span class="pill">không rơi</span>'}</td>
+      <td class="num">${r.stack}</td><td class="num">${r.unit != null ? fmt(r.unit) : "–"}</td><td class="num">${r.set_price != null ? fmt(r.set_price) : "–"}</td>
+      <td style="font-size:12px">${esc(r.reward)}</td><td class="num">${r.reward_value != null ? fmt(r.reward_value) : "–"}</td>
+      <td class="num ${r.profit == null ? "" : r.profit >= 0 ? "pos" : "neg"}">${r.profit != null ? (r.profit > 0 ? "+" : "") + fmt(r.profit) + ` <span class="muted" style="font-size:11px">${Math.round(r.roi * 100)}%</span>` : "–"}</td>
+      <td class="num">${r.owned ? `${r.owned}/${r.stack}` + (sets ? ` <b class="pos">(${sets} bộ)</b>` : "") : ""}</td>
+      <td class="muted" style="font-size:12px">${esc(r.note)}</td></tr>`; }).join("");
+}
+
+// ---------- stash clean-up ----------
+let CH = null;
+const CH_SLOT = { weapon: "Vũ khí", helmet: "Mũ", body: "Giáp", gloves: "Găng", boots: "Giày", belt: "Đai", amulet: "Dây chuyền", ring: "Nhẫn (2/bộ)", "1h": "– 1 tay", "2h": "– 2 tay", shield: "– Khiên" };
+async function chLoad() {
+  $("chState").textContent = "Đang tải…";
+  try { CH = await api(`/api/chest?junk_max=${+$("chJunk").value || 0}&include_stack=${$("chStack").checked}&recipe_max=${+$("chRecMax").value || 0}`); }
+  catch (e) { $("chState").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  if (!CH.ts) { $("chState").textContent = "Chưa có dữ liệu – bấm Snapshot (bản mới lưu item của các tab đang theo dõi)."; $("chRecipe").innerHTML = ""; $("chTable").innerHTML = ""; return; }
+  $("chState").textContent = `${CH.count} item · snapshot ${when(CH.ts)}`;
+  const tabs = [...new Set(CH.junk.map(j => j.label))], cur = $("chTab").value;
+  $("chTab").innerHTML = `<option value="">Mọi tab</option>` + tabs.map(t => `<option ${t === cur ? "selected" : ""}>${esc(t)}</option>`).join("");
+  chRecipe(); chRender();
+}
+function chRecipe() {
+  const r = CH.recipe, P = r.pool, row = s => P[s] || { low: 0, high: 0, unid_low: 0, unid_high: 0 };
+  const lim = new Set(r.bottleneck);
+  const slots = ["weapon", "2h", "1h", "shield", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"];
+  $("chRecipe").innerHTML = `<div style="display:flex;gap:28px;flex-wrap:wrap">
+      <div><div class="muted">Bộ đủ</div><div class="big">${r.sets}</div></div>
+      <div><div class="muted">Bộ đổi được chaos</div><div class="big">${r.chaos_sets}</div></div>
+      ${r.sets > r.chaos_sets ? `<div class="muted" style="align-self:center;font-size:12px">thiếu ${r.sets - r.chaos_sets} món ilvl 60–74</div>` : ""}</div>
+    <table style="margin-top:10px"><tr><th>Ô</th><th class="num">ilvl 60–74</th><th class="num">ilvl 75+</th><th class="num">Chưa identify</th><th class="num">Đủ cho … bộ</th></tr>` +
+    slots.map(s => { const x = row(s), sub = ["1h", "2h", "shield"].includes(s);
+      const per = s === "weapon" ? r.per_set.weapon : r.per_set[s];
+      const lo = s === "weapon" ? row("1h").low + row("2h").low + row("shield").low : x.low;
+      const hi = s === "weapon" ? row("1h").high + row("2h").high + row("shield").high : x.high;
+      const un = s === "weapon" ? ["1h", "2h", "shield"].reduce((a, k) => a + row(k).unid_low + row(k).unid_high, 0) : x.unid_low + x.unid_high;
+      return `<tr style="${sub ? "font-size:12px;color:var(--muted)" : ""}${lim.has(s) ? ";background:#3a2020" : ""}">
+        <td>${CH_SLOT[s]}${lim.has(s) ? ' <span class="pill" style="background:#5a2a2a;color:#f0c8c8">thiếu</span>' : ""}</td>
+        <td class="num">${lo}</td><td class="num">${hi}</td><td class="num">${un}</td><td class="num">${sub ? "" : per}</td></tr>`; }).join("") + `</table>`;
+}
+function chList() {
+  const tab = $("chTab").value, noRec = $("chNoRecipe").checked;
+  return CH.junk.filter(j => (!tab || j.label === tab) && !(noRec && j.kind.startsWith("rare (dùng")));
+}
+function chRender() {
+  if (!CH || !CH.ts) return;
+  const list = chList(), tab = $("chTab").value;
+  // stash-search regex: shortest substring of each junk name that no kept item in the same tab(s) contains
+  const keep = CH.names.filter(([l]) => !tab || l === tab).map(([, n]) => rxClean(n));
+  const parts = [...new Set(list.map(j => rxUnique((j.name + " " + j.typeLine).trim(), keep)))].filter(Boolean);
+  const groups = rxGroups(parts, false, RX_LIMIT);
+  CH.rx = groups;
+  $("chRx").textContent = groups.length ? groups[0] : "(không có đồ rác)";
+  $("chRxHint").textContent = groups.length > 1 ? `Dài quá 250 ký tự nên chia ${groups.length} lần tìm – bấm Copy nhiều lần để lấy lần tiếp theo (${CH.rxi ? CH.rxi + 1 : 1}/${groups.length}).`
+    : (tab ? "" : "Mẹo: chọn 1 tab để regex ngắn và chính xác hơn.") + " Regex so trên tên item; trong game ô tìm còn khớp cả mod nên có thể sáng thêm vài món – nhìn lại trước khi bán.";
+  $("chTable").innerHTML = `<tr><th></th><th>Item</th><th>Loại</th><th class="num">ilvl</th><th class="num">Giá trị</th><th>Tab</th><th class="num">Ô</th></tr>` +
+    list.slice(0, 600).map(j => `<tr><td>${img(j.icon)}</td><td>${esc((j.name + " " + j.typeLine).trim())}${j.qty > 1 ? ` <span class="muted">×${j.qty}</span>` : ""}${j.identified ? "" : ' <span class="pill">unid</span>'}</td>
+      <td class="muted" style="font-size:12px">${esc(j.kind)}</td><td class="num muted">${j.ilvl || ""}</td>
+      <td class="num">${j.total ? fmt(j.total) : "0"}</td><td class="muted">${esc(j.label)}</td>
+      <td class="num muted" style="font-size:12px">${j.x != null ? `${j.x + 1}, ${j.y + 1}` : ""}</td></tr>`).join("");
+}
+async function chCopy() {
+  if (!CH || !CH.rx || !CH.rx.length) return;
+  CH.rxi = ((CH.rxi ?? -1) + 1) % CH.rx.length;
+  const t = CH.rx[CH.rxi]; $("chRx").textContent = t;
+  try { await navigator.clipboard.writeText(t); } catch { prompt("Copy:", t); }
+  $("chRxHint").textContent = CH.rx.length > 1 ? `Đã copy lần ${CH.rxi + 1}/${CH.rx.length}. Bấm tiếp để lấy lần sau.` : "Đã copy.";
+}
+
+// ---------- calculators ----------
+let CALC = { prices: null, an: null };
+async function calcLoad() {
+  if (!CALC.prices) {
+    try { CALC.prices = await api("/api/calc/prices"); } catch (e) { CALC.prices = {}; }
+    if (!$("vcPrice").value) $("vcPrice").value = CALC.prices["Chromatic Orb"] != null ? +CALC.prices["Chromatic Orb"].toFixed(3) : "";
+    if (!$("fuPrice").value) $("fuPrice").value = CALC.prices["Orb of Fusing"] != null ? +CALC.prices["Orb of Fusing"].toFixed(3) : "";
+    ["vcS", "vcStr", "vcDex", "vcInt", "vcR", "vcG", "vcB", "vcPrice"].forEach(id => $(id).oninput = vcRun);
+    ["fuS", "fuL", "fuPrice", "fuHave"].forEach(id => $(id).oninput = fuRun);
+  }
+  vcRun(); fuRun();
+  if (!CALC.an) {
+    $("anState").textContent = "Đang tải công thức oil từ poewiki.net…";
+    try { CALC.an = await api("/api/calc/anoint"); } catch (e) { $("anState").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  }
+  anRender();
+}
+// --- Vorici / chromatic (Siveran's formulas) ---
+function vcColorChances(str, dex, int) {
+  const req = [str, dex, int].map(x => Math.max(0, +x || 0)), n = req.filter(x => x > 0).length, tot = req.reduce((a, b) => a + b, 0);
+  if (n === 0) return [1 / 3, 1 / 3, 1 / 3];
+  if (n === 1) { const R = tot, on = 0.9 * (R + 10) / (R + 20), off = 0.05 + 4.5 / (R + 20); return req.map(r => r > 0 ? on : off); }
+  if (n === 2) return req.map(r => r > 0 ? 0.9 * r / tot : 0.1);
+  return req.map(r => r / tot);
+}
+const vcFact = n => n <= 1 ? 1 : n * vcFact(n - 1);
+function vcProb(n, want, ch) {   // chance that n random sockets contain at least want[c] of each colour
+  if (want[0] + want[1] + want[2] > n) return 0;
+  let p = 0;
+  for (let r = want[0]; r <= n; r++) for (let g = want[1]; g <= n - r; g++) {
+    const b = n - r - g; if (b < want[2]) continue;
+    p += vcFact(n) / (vcFact(r) * vcFact(g) * vcFact(b)) * ch[0] ** r * ch[1] ** g * ch[2] ** b;
+  }
+  return p;
+}
+const VC_BENCH = [[[1, 0, 0], 4], [[0, 1, 0], 4], [[0, 0, 1], 4], [[2, 0, 0], 25], [[0, 2, 0], 25], [[0, 0, 2], 25],
+  [[3, 0, 0], 120], [[0, 3, 0], 120], [[0, 0, 3], 120], [[1, 1, 0], 15], [[1, 0, 1], 15], [[0, 1, 1], 15],
+  [[2, 1, 0], 100], [[2, 0, 1], 100], [[1, 2, 0], 100], [[0, 2, 1], 100], [[1, 0, 2], 100], [[0, 1, 2], 100]];
+const VC_COL = ["R", "G", "B"];
+function vcRun() {
+  const n = Math.min(6, Math.max(1, +$("vcS").value || 1)), want = [+$("vcR").value || 0, +$("vcG").value || 0, +$("vcB").value || 0];
+  const price = +$("vcPrice").value || 0, ch = vcColorChances($("vcStr").value, $("vcDex").value, $("vcInt").value);
+  if (want[0] + want[1] + want[2] > n) { $("vcOut").innerHTML = `<span class="err">Tổng màu muốn lớn hơn số socket.</span>`; return; }
+  if (!want.some(Boolean)) { $("vcOut").innerHTML = `<span class="muted">Nhập số socket mỗi màu muốn có.</span> <span class="muted" style="font-size:12px">Tỉ lệ 1 socket: đỏ ${(ch[0] * 100).toFixed(1)}% · xanh lá ${(ch[1] * 100).toFixed(1)}% · xanh dương ${(ch[2] * 100).toFixed(1)}%</span>`; return; }
+  const opts = [];
+  const pc = vcProb(n, want, ch);
+  if (pc > 0) opts.push({ name: "Spam Chromatic", p: pc, per: 1, avg: 1 / pc });
+  for (const [f, cost] of VC_BENCH) {
+    if (f.some((x, i) => x > want[i]) || f[0] + f[1] + f[2] > n) continue;
+    const rest = want.map((w, i) => w - f[i]), p = vcProb(n - f[0] - f[1] - f[2], rest, ch);
+    if (p > 0) opts.push({ name: "Bench: " + f.map((x, i) => x ? x + VC_COL[i] : "").join(""), p, per: cost, avg: cost / p });
+  }
+  opts.sort((a, b) => a.avg - b.avg);
+  $("vcOut").innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">Tỉ lệ 1 socket: <span style="color:#d9645b">đỏ ${(ch[0] * 100).toFixed(1)}%</span> · <span style="color:#6fbf73">xanh lá ${(ch[1] * 100).toFixed(1)}%</span> · <span style="color:#5b8fd9">xanh dương ${(ch[2] * 100).toFixed(1)}%</span></div>
+    <table><tr><th>Cách</th><th class="num">Tỉ lệ mỗi lần</th><th class="num">Chromatic/lần</th><th class="num">TB cần (chromatic)</th><th class="num">≈ chaos</th></tr>` +
+    opts.map((o, i) => `<tr style="${i === 0 ? "background:#1f2418" : ""}"><td>${o.name}${i === 0 ? ' <span class="pill" style="background:#4a5a1e;color:#f0e6c8">rẻ nhất</span>' : ""}</td>
+      <td class="num">${(o.p * 100).toFixed(o.p < 0.01 ? 3 : 2)}%</td><td class="num">${o.per}</td><td class="num"><b>${Math.round(o.avg).toLocaleString()}</b></td>
+      <td class="num">${price ? fmt(o.avg * price) : "–"}</td></tr>`).join("") + `</table>`;
+}
+// --- Fusing ---
+function fuRun() {
+  const s = +$("fuS").value, L = +$("fuL").value, price = +$("fuPrice").value || 0, have = +$("fuHave").value || 0;
+  if (s === 5 && L === 6) { $("fuOut").innerHTML = `<span class="err">Item 5 socket không thể 6 link.</span>`; return; }
+  const p = s === 6 ? (L === 6 ? 1 / 1100 : 1 / 80) : 1 / 160, bench = L === 6 ? 1500 : 150, avg = 1 / p;
+  const within = n => 1 - (1 - p) ** n, needFor = q => Math.ceil(Math.log(1 - q) / Math.log(1 - p));
+  const cheaper = avg < bench;
+  $("fuOut").innerHTML = `<table>
+    <tr><td>Trung bình cần</td><td class="num"><b>${Math.round(avg).toLocaleString()}</b> fusing ${price ? `<span class="muted">≈ ${fmt(avg * price)}</span>` : ""}</td></tr>
+    <tr><td>Bench (chắc chắn)</td><td class="num">${bench.toLocaleString()} fusing ${price ? `<span class="muted">≈ ${fmt(bench * price)}</span>` : ""}</td></tr>
+    <tr><td>Có ${have.toLocaleString()} fusing → tỉ lệ ra</td><td class="num"><b>${(within(have) * 100).toFixed(1)}%</b></td></tr>
+    <tr><td>Cần để có 50% / 90% / 99%</td><td class="num">${needFor(.5).toLocaleString()} / ${needFor(.9).toLocaleString()} / ${needFor(.99).toLocaleString()}</td></tr>
+    <tr><td>Spam tay đúng ${bench.toLocaleString()} lần (bằng giá bench)</td><td class="num">${(within(bench) * 100).toFixed(0)}% ra</td></tr></table>
+    <p style="margin:8px 0 0">${cheaper ? "Spam tay rẻ hơn trung bình nhưng có rủi ro đen; ít vốn thì dùng bench cho chắc." : "Bench rẻ hơn trung bình – dùng bench."}</p>`;
+}
+// --- Anoint ---
+function anRender() {
+  if (!CALC.an) return;
+  const P = CALC.an.oil_prices, f = $("anFind").value.trim().toLowerCase(), so = $("anSort").value;
+  const rows = CALC.an.anoints.map(a => ({ ...a, cost: a.oils.reduce((s, o) => s + (P[o] ?? NaN), 0) }))
+    .filter(a => !f || a.name.toLowerCase().includes(f) || a.stat.toLowerCase().includes(f) || a.oils.some(o => o.toLowerCase().includes(f)));
+  rows.sort(so === "name" ? (a, b) => a.name.localeCompare(b.name) : so === "cost" ? (a, b) => (a.cost || 1e12) - (b.cost || 1e12) : (a, b) => (b.cost || 0) - (a.cost || 0));
+  $("anState").textContent = `${CALC.an.anoints.length} notable · giá oil từ poe.ninja`;
+  $("anTable").innerHTML = `<tr><th>Notable</th><th>Chỉ số</th><th>Oil</th><th class="num">Tổng</th></tr>` +
+    rows.slice(0, 300).map(a => `<tr><td><b>${esc(a.name)}</b>${a.anoint_only ? ' <span class="pill">chỉ anoint</span>' : ""}${a.keystone ? ' <span class="pill">keystone</span>' : ""}</td>
+      <td class="muted" style="font-size:12px;white-space:pre-line">${esc(a.stat)}</td>
+      <td style="font-size:12px">${a.oils.map(o => `${esc(o.replace(" Oil", ""))} <span class="muted">${P[o] != null ? fmt(P[o]) : "?"}</span>`).join("<br>")}</td>
+      <td class="num">${isNaN(a.cost) ? "?" : fmt(a.cost)}</td></tr>`).join("");
 }
 
 // ---------- currency exchange flip (beta) ----------
@@ -974,22 +1598,53 @@ async function loadSessions() {
   const rows = await api("/api/sessions");
   const open = rows.find(r => !r.end_snapshot);
   $("startBtn").disabled = !!open; $("stopBtn").disabled = !open;
-  $("sessTable").innerHTML = `<tr><th>Phiên</th><th>Bắt đầu</th><th class="num">Thời gian</th><th class="num">Lời</th><th class="num">/giờ</th><th></th></tr>` +
+  SESS = rows;
+  $("sessTable").innerHTML = rows.length ? `<tr><th>Phiên</th><th class="num">Thời gian</th><th class="num">Chi phí</th><th class="num">Lời ròng</th><th class="num">/giờ</th><th></th></tr>` +
     rows.map(r => {
       const dur = ((r.ended || Date.now() / 1000) - r.started) / 60;
       const cls = r.profit >= 0 ? "pos" : "neg";
-      return `<tr class="${r.end_snapshot ? "click" : ""}" onclick="${r.end_snapshot ? `showDiff(${r.id}, '${esc(r.name)}')` : ""}">
-        <td>${esc(r.name)} ${r.end_snapshot ? "" : '<span class="pill">đang chạy</span>'}</td><td class="muted">${when(r.started)}</td>
+      return `<tr class="${r.end_snapshot ? "click" : ""}" onclick="${r.end_snapshot ? `showDiff(${r.id}, '${esc(r.name)}', this)` : ""}">
+        <td>${esc(r.name)} ${r.end_snapshot ? "" : '<span class="pill">đang chạy</span>'}<div class="muted" style="font-size:11px">${when(r.started)}</div></td>
         <td class="num">${Math.floor(dur / 60)}h${String(Math.round(dur % 60)).padStart(2, "0")}</td>
-        <td class="num ${cls}">${r.profit != null ? fmt(r.profit) : "–"}</td><td class="num ${cls}">${r.per_hour != null ? fmt(r.per_hour) : "–"}</td>
-        <td><button class="btn" onclick="event.stopPropagation();delSess(${r.id})">✕</button></td></tr>`;
+        <td class="num"><a href="#" onclick="event.stopPropagation();costOpen(${r.id});return false" style="color:${r.cost ? "var(--red)" : "var(--muted)"}">${r.cost ? "−" + fmt(r.cost) : "+ nhập"}</a></td>
+        <td class="num ${cls}" title="${r.gross != null ? "Snapshot cuối − đầu: " + fmt(r.gross) : ""}">${r.profit != null ? fmt(r.profit) : "–"}</td><td class="num ${cls}">${r.per_hour != null ? fmt(r.per_hour) : "–"}</td>
+        <td><button class="btn sm" onclick="event.stopPropagation();delSess(${r.id})">✕</button></td></tr>`;
+    }).join("") : `<tr><td class="muted">Chưa có phiên nào.</td></tr>`;
+}
+// ---- farm session input costs ----
+let SESS = [], COST = { id: null, rows: [], prices: null };
+async function costOpen(id) {
+  const s = SESS.find(x => x.id === id); if (!s) return;
+  if (!COST.prices) {
+    try { COST.prices = Object.fromEntries(await api("/api/prices/names")); } catch (e) { COST.prices = {}; }
+    $("costNames").innerHTML = Object.keys(COST.prices).map(n => `<option value="${esc(n)}">`).join("");
+  }
+  COST.id = id; COST.rows = s.costs.map(c => ({ ...c })); if (!COST.rows.length) COST.rows.push({ name: "", qty: 1, unit: "" });
+  $("costTitle").textContent = `Chi phí: ${s.name}`; $("costCard").style.display = "block"; costRender();
+}
+function costRender() {
+  $("costTable").innerHTML = `<tr><th>Món</th><th class="num">SL</th><th class="num">Đơn giá (c)</th><th class="num">Tổng</th><th></th></tr>` +
+    COST.rows.map((r, i) => {
+      const u = r.unit === "" || r.unit == null ? (COST.prices[r.name] ?? 0) : +r.unit;
+      return `<tr><td><input list="costNames" value="${esc(r.name)}" style="width:100%" onchange="COST.rows[${i}].name=this.value;costRender()" placeholder="vd: Ambush Scarab of Potency"></td>
+        <td class="num"><input type="number" min="0" value="${r.qty}" style="width:70px" onchange="COST.rows[${i}].qty=+this.value;costRender()"></td>
+        <td class="num"><input type="number" min="0" step="0.1" value="${r.unit ?? ""}" placeholder="${COST.prices[r.name] ?? ""}" style="width:90px" onchange="COST.rows[${i}].unit=this.value;costRender()"></td>
+        <td class="num">${fmt(u * (r.qty || 0))}</td><td><button class="btn sm" onclick="COST.rows.splice(${i},1);costRender()">✕</button></td></tr>`;
     }).join("");
+  const sum = COST.rows.reduce((a, r) => a + (r.unit === "" || r.unit == null ? (COST.prices[r.name] ?? 0) : +r.unit) * (r.qty || 0), 0);
+  $("costSum").textContent = "Tổng: " + fmt(sum);
+}
+function costAdd() { COST.rows.push({ name: "", qty: 1, unit: "" }); costRender(); }
+async function costSave() {
+  try { await post(`/api/session/${COST.id}/costs`, { items: COST.rows }); } catch (e) { return alert(e.message); }
+  $("costCard").style.display = "none"; loadSessions();
 }
 async function sessStart() { try { await post("/api/session/start", { name: $("sessName").value }); wasRunning = true; } catch (e) { alert(e.message); } }
 async function sessStop() { try { await post("/api/session/stop"); wasRunning = true; } catch (e) { alert(e.message); } }
 async function delSess(id) { if (confirm("Xoá phiên này?")) { await api(`/api/session/${id}`, { method: "DELETE" }); loadSessions(); } }
-async function showDiff(id, name) {
+async function showDiff(id, name, tr) {
   const d = await api(`/api/session/${id}/diff`);
+  document.querySelectorAll("#sessTable tr").forEach(r => r.classList.toggle("sel", r === tr));
   $("diffCard").style.display = "block"; $("diffTitle").textContent = `Thay đổi trong: ${name}`;
   $("diffTable").innerHTML = `<tr><th></th><th>Item</th><th class="num">± SL</th><th class="num">± Giá trị</th></tr>` +
     d.slice(0, 200).map(r => `<tr><td>${img(r.icon)}</td><td>${esc(r.name)}</td><td class="num">${r.dqty > 0 ? "+" : ""}${+r.dqty.toFixed(0)}</td>

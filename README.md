@@ -89,3 +89,24 @@ Sửa file game vi phạm ToS của GGG, có rủi ro bị ban.
 ## Timeless finder (beta)
 
 Tab **Timeless finder** nhúng cây passive và chức năng tìm seed của Vilsol (https://vilsol.github.io/timeless-jewels, GPL-3.0, chạy online). Phía dưới có ô dán danh sách seed để check giá instant buyout, theo cùng luật với tab Timeless. Seed nào bạn đã có trong stash sẽ được đánh dấu. Ở tab Timeless, mỗi jewel có nút **Xem trên cây**.
+
+## Mercenary (beta)
+
+Tab **Mercenary**: rê chuột vào Mercenary Warrant trong game, Ctrl+C, dán vào ô bên trái. Tick skill (bắt buộc) và support (tùy chọn) muốn tìm, rồi bấm **Check giá**.
+Mỗi skill tick = 1 nhóm "Mercenary Skill Group" trên trade (stat group `type: "mercenary"`, support phải nằm trên đúng skill đó).
+Giá = trung bình 5 listing Instant Buyout rẻ nhất (chaos, làm tròn xuống), chỉ tính listing đạt level tối thiểu (mặc định 83). Trade site không có bộ lọc level nên tool lọc trên 30 listing rẻ nhất; nút **Xem trên trade** mở cùng query (không lọc level). Kết quả nhớ 30 phút. Warrant trong stash chưa được định giá trong snapshot (vẫn tính 0).
+
+## Gem / Bài div / Dọn rương / Máy tính
+
+- **Gem**: lời từ lên level (L1 → max), quality (20 Gemcutter's Prism), Vaal (giá trị kỳ vọng ước tính) và transfigure ở Lab (gem gốc → bản transfigured cùng level/quality). Giá poe.ninja SkillGem, lọc theo số listing.
+- **Bài div**: giá cả bộ so với giá phần thưởng. Phần thưởng + số lá lấy từ poewiki.net (cargo API, nhớ 7 ngày ở `~/.config/poe-wealth/divcards_wiki.json`). Đánh dấu bài đang có trong hòm.
+- **Dọn rương**: đếm bộ chaos recipe từ rare trong các tab đang theo dõi (loại món theo icon) + danh sách đồ rẻ và regex tìm trong stash. Dữ liệu từ snapshot gần nhất (`stash_items.json`).
+- **Máy tính**: Vorici/Chromatic (công thức Siveran + bench), Fusing (tỉ lệ cộng đồng ước tính, so với bench), Anoint (công thức oil từ poewiki.net, giá oil poe.ninja).
+- **Phiên farm**: nhập chi phí đầu vào (scarab, map…) cho từng phiên; lời ròng = snapshot cuối − đầu − chi phí.
+
+## Challenge
+
+Tab **Challenge**: tiến độ challenge của league (x/40), thanh mốc phần thưởng (mặc định 12/24/32/34/36, sửa được), mỗi challenge hiện bước còn thiếu, ghi chú, đánh sao ưu tiên, tick tay.
+**Đồng bộ** tải trang profile `pathofexile.com/account/view-profile/<tên-1234>/challenges` bằng POESESSID. Cloudflare hay chặn – khi đó mở trang trong trình duyệt, Ctrl+U → Ctrl+A → Ctrl+C rồi bấm **Dán nguồn trang**. Lưu ở `~/.config/poe-wealth/challenges.json`; ghi chú/sao/tick tay giữ nguyên khi đồng bộ lại.
+
+**Hướng dẫn từng challenge** lấy từ guide cộng đồng của CraniumViolence (https://craniumviolence.github.io, CC BY-NC-SA 4.0 – file `league.txt`, nhớ 12 giờ ở `challenges_guide.json`): độ khó, số bước cần, mẹo cho từng bước còn thiếu (giá item theo poe.ninja), ghi chú của tác giả, link tới đoạn tương ứng trên trang. Chưa đồng bộ được thì tab hiện luôn 40 challenge từ guide để tick tay từng bước.

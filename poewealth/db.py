@@ -64,6 +64,10 @@ class DB:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(sessions)")}
+        if "costs" not in cols:   # farm session input costs: JSON [{name, qty, unit}]
+            with self.conn:
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN costs TEXT DEFAULT '[]'")
 
     def q(self, sql: str, args=()) -> list[dict]:
         return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
