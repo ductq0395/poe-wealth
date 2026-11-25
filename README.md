@@ -21,7 +21,6 @@ poe-wealth
 - Đổi dependency trong `pyproject.toml`: `pipx install -e --force ~/Downloads/poe-wealth`.
 - Gỡ: `pipx uninstall poe-wealth` (dữ liệu trong `~/.config/poe-wealth` vẫn giữ).
 - Đổi port: `env POE_WEALTH_PORT=8790 poe-wealth`.
-- Windows: `gh repo clone poe-wealth`, cài Python + pipx, `pipx install -e .\poe-wealth`; cập nhật bằng `git pull`. Máy Windows dùng chung rate limit tài khoản với máy kia → để Auto snapshot = 0 ở một máy.
 
 ### Chạy nền khi khởi động (tuỳ chọn)
 
@@ -43,6 +42,43 @@ WantedBy=default.target
 systemctl --user daemon-reload
 systemctl --user enable --now poe-wealth
 ```
+
+## Cài và chạy (Windows 10/11)
+
+Mở **PowerShell** (không cần quyền Admin) và chạy từng khối:
+
+```powershell
+# 1. Python + Git (bỏ qua nếu đã có; Python cần >= 3.11)
+winget install -e --id Python.Python.3.13
+winget install -e --id Git.Git
+# → đóng PowerShell, mở lại
+
+# 2. pipx
+py -m pip install --user pipx
+py -m pipx ensurepath
+# → đóng PowerShell, mở lại
+
+# 3. Tải và cài poe-wealth
+cd $HOME
+git clone https://github.com/ductq0395/poe-wealth.git
+pipx install -e .\poe-wealth
+
+# 4. Chạy
+poe-wealth
+# mở http://127.0.0.1:8787
+```
+
+- Để cửa sổ PowerShell mở trong lúc dùng; tắt app bằng **Ctrl+C** hoặc đóng cửa sổ.
+- **Cập nhật**: `cd $HOME\poe-wealth; git pull`, rồi tắt và chạy lại `poe-wealth`. Nếu `pyproject.toml` đổi dependency: `pipx install -e --force .`
+- **Gỡ**: `pipx uninstall poe-wealth` (dữ liệu trong `%USERPROFILE%\.config\poe-wealth` vẫn giữ).
+- **Đổi port**: `$env:POE_WEALTH_PORT=8790; poe-wealth`
+- **Tự chạy khi bật máy** (tuỳ chọn): Win+R → `shell:startup` → chuột phải *New → Shortcut* → nhập `%USERPROFILE%\.local\bin\poe-wealth.exe`.
+- Dữ liệu nằm ở `%USERPROFILE%\.config\poe-wealth` (thay cho `~/.config/...` trên Linux).
+- Lỗi `'poe-wealth' is not recognized`: chưa mở lại PowerShell sau `pipx ensurepath`, hoặc chạy `py -m pipx ensurepath` lần nữa.
+- `Client.txt` và thư mục `My Games\Path of Exile` được tự tìm ở `C:\Program Files (x86)\Grinding Gear Games\Path of Exile\…`, `C:\Program Files (x86)\Steam\steamapps\common\Path of Exile\…` và `%USERPROFILE%\Documents\My Games\Path of Exile`. Cài game ở ổ/thư mục khác thì nhập trong tab **Cài đặt**.
+- **Cảnh báo giá** trên Windows chỉ hiện trong app (không có thông báo desktop – tính năng đó dùng `notify-send` của Linux).
+- **Patch game**: đường dẫn kiểu `C:\Program Files (x86)\Grinding Gear Games\Path of Exile\Content.ggpk`; `pyooz` có sẵn bản cho Windows nên không cần cài thêm gì.
+- Cùng một tài khoản chạy app trên 2 máy thì dùng chung rate limit của GGG → để **Auto snapshot = 0** ở một máy.
 
 ## Lần đầu
 
@@ -99,6 +135,7 @@ systemctl --user enable --now poe-wealth
 
 ### Flip (beta)
 - So giá mỗi món qua cặp chaos và cặp divine trên Currency Exchange (poe.ninja); gợi ý 2 lệnh mua/bán tỉ lệ số nguyên và lời ước tính theo vốn. Không tự đặt lệnh.
+- **Tự quét** (ô "Tự quét [30] phút", 0 = tắt): dữ liệu cũ hơn N phút thì hỏi poe.ninja (ETag overview Currency); có dữ liệu mới thì quét, chưa có thì 5 phút sau hỏi lại, cũ quá 60 phút thì quét luôn. poe.ninja cache 30 phút nên không lấy được mới hơn. Các lần poe.ninja đổi dữ liệu ghi trong `flip_auto.json`.
 
 ### Map & Trade
 App đọc `logs/Client.txt` của game mỗi 20 giây (tự tìm, vd `/mnt/games/PoE/logs/Client.txt`; hoặc nhập trong Cài đặt). Lần đầu chỉ đọc 150 MB cuối.
@@ -156,6 +193,7 @@ Cách dùng: tắt game → nhập đường dẫn `Content.ggpk` (standalone) h
 | `challenges.json` | Tiến độ, ghi chú, sao, tick tay của challenge |
 | `challenges_guide.json`, `divcards_wiki.json`, `anoints_wiki.json` | Bộ nhớ đệm guide / wiki |
 | `flip_cache.json` | Kết quả quét Flip |
+| `flip_auto.json` | ETag poe.ninja gần nhất + các lần dữ liệu đổi (tự quét Flip) |
 | `game-backup/` | Bản gốc file game trước khi patch |
 | `poe-wealth.log` | Log (bật chi tiết: `env POE_WEALTH_DEBUG=1 poe-wealth`) |
 
