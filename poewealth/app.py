@@ -110,6 +110,18 @@ async def auto_loop():
                     "Auto snapshot lỗi, thử lại sau %.0f phút", (next_try - time.time()) / 60)
 
 
+async def flip_auto_loop():
+    """Tự quét tab Flip theo cfg.flip_auto_minutes (xem flip.auto_step)."""
+    await asyncio.sleep(20)
+    while True:
+        try:
+            delay = await flip.auto_step(state["flip"], cfg())
+        except Exception:  # noqa: BLE001
+            logging.getLogger("poewealth").exception("flip auto lỗi")
+            delay = 600
+        await asyncio.sleep(max(10.0, delay))
+
+
 def setup_logging() -> Path:
     from logging.handlers import RotatingFileHandler
     cfgmod.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -142,9 +154,11 @@ async def lifespan(app: FastAPI):
     state["merc"] = mp
     loop_task = asyncio.create_task(auto_loop())
     log_task = asyncio.create_task(log_loop())
+    flip_task = asyncio.create_task(flip_auto_loop())
     yield
     loop_task.cancel()
     log_task.cancel()
+    flip_task.cancel()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -466,7 +480,8 @@ async def get_alerts(hours: float | None = None, pct: float | None = None, min_t
 @app.get("/api/flip")
 async def flip_get():
     f = state["flip"]
-    return {"state": f.state, "data": f.data, "wait": f.can_scan(cfg().league), "types": flip.FLIP_TYPES}
+    return {"state": f.state, "data": f.data, "wait": f.can_scan(cfg().league), "types": flip.FLIP_TYPES,
+            "auto": f.auto}
 
 
 @app.post("/api/flip/scan")

@@ -325,6 +325,7 @@
         <label style="margin:0">Vốn <input id="flCap" type="number" min="0" step="1" style="width:70px" onchange="flSave()"> div</label>
         <label style="margin:0">Lệch ≥ <input id="flSpread" type="number" min="0" step="1" style="width:60px" onchange="flSave()"> %</label>
         <label style="margin:0">Khối lượng/ngày ≥ <input id="flVol" type="number" min="0" step="500" style="width:90px" onchange="flSave()"> c</label>
+        <label style="margin:0" title="Dữ liệu cũ hơn N phút thì hỏi poe.ninja, có dữ liệu mới thì tự quét. 0 = tắt">Tự quét <input id="flAuto" type="number" min="0" step="5" style="width:60px" onchange="flSave()"> phút</label>
         <label style="margin:0">Tối đa <input id="flMax" type="number" min="10" max="400" step="10" style="width:70px" onchange="flSave()"> món/lần quét</label>
         <label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" id="flStable" onchange="flRender()"> Chỉ món lệch ổn định (≥4/7 ngày)</label>
       </div>
@@ -1470,11 +1471,17 @@ function anRender() {
 }
 
 // ---------- currency exchange flip (beta) ----------
-let FL = null, flOpen = null, flTimer = null;
+let FL = null, flOpen = null, flTimer = null, flPoll = null;
 async function flLoad() {
   FL = await api("/api/flip");
   $("flCap").value = CFG.flip_capital_div; $("flSpread").value = CFG.flip_min_spread;
   $("flVol").value = CFG.flip_min_volume; $("flMax").value = CFG.flip_max_items;
+  $("flAuto").value = CFG.flip_auto_minutes ?? 30;
+  if (!flPoll) flPoll = setInterval(async () => {   // tab Flip đang mở: thấy kết quả tự quét
+    if (!document.getElementById("flip").classList.contains("active") && document.getElementById("flip").offsetParent === null) return;
+    const old = FL && FL.data.scanned_at; FL = await api("/api/flip"); flStatus();
+    if (FL.data.scanned_at !== old) flRender();
+  }, 60000);
   const sel = new Set(CFG.flip_types || []);
   $("flTypes").innerHTML = FL.types.map(t => `<label style="margin:0;display:flex;gap:4px;align-items:center;color:var(--text);background:#16171c;padding:3px 8px;border-radius:5px">
     <input type="checkbox" value="${t}" ${sel.has(t) ? "checked" : ""} onchange="flSave()">${t}</label>`).join("");
@@ -1486,7 +1493,8 @@ function flStatus() {
   if (st.running) $("flState").textContent = st.message;
   else if (st.error) $("flState").innerHTML = `<span class="err">${esc(st.error)}</span>`;
   else $("flState").textContent = d.scanned_at ? `Quét lúc ${when(d.scanned_at)} · 1 div = ${Math.round(d.div_chaos)}c` +
-    (FL.wait > 0 ? ` · quét lại được sau ${Math.ceil(FL.wait / 60)} phút` : "") : "Chưa quét";
+    (FL.wait > 0 ? ` · quét lại được sau ${Math.ceil(FL.wait / 60)} phút` : "") +
+    (FL.auto && FL.auto.message ? ` · ${FL.auto.message}` : "") : "Chưa quét";
   if (st.running && !flTimer) flTimer = setInterval(async () => {
     FL = await api("/api/flip"); flStatus();
     if (!FL.state.running) { clearInterval(flTimer); flTimer = null; flRender(); }
@@ -1495,7 +1503,8 @@ function flStatus() {
 async function flSave() {
   const types = [...document.querySelectorAll("#flTypes input:checked")].map(i => i.value);
   const body = { flip_capital_div: +$("flCap").value || 0, flip_min_spread: +$("flSpread").value || 0,
-    flip_min_volume: +$("flVol").value || 0, flip_max_items: +$("flMax").value || 150, flip_types: types };
+    flip_min_volume: +$("flVol").value || 0, flip_max_items: +$("flMax").value || 150, flip_types: types,
+    flip_auto_minutes: Math.max(0, Math.round(+$("flAuto").value || 0)) };
   Object.assign(CFG, body); await post("/api/config", body); flRender();
 }
 async function flScan() {

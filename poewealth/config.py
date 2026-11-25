@@ -43,6 +43,8 @@ class Config:
     flip_min_volume: float = 2000.0   # chaos traded per day (poe.ninja volume)
     flip_min_spread: float = 5.0      # %
     flip_capital_div: float = 10.0
+    flip_auto_minutes: int = 30       # tự quét khi dữ liệu cũ hơn N phút (0 = tắt); poe.ninja cache 30 phút
+    flip_auto_max_minutes: int = 60   # ETag không đổi vẫn quét khi dữ liệu cũ hơn N phút
     # regex tab
     regex_mapmods: list = field(default_factory=list)   # map mod keys to avoid
     regex_map_min: dict = field(default_factory=dict)   # {"quantity": 80, "rarity": 0, "packsize": 0}

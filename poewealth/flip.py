@@ -11,6 +11,7 @@ poe.ninja data is cached 30 min by Cloudflare and has no published rate limit, s
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -24,6 +25,7 @@ from .ratelimit import Limiter
 API = "https://poe.ninja/poe1/api/economy/exchange/current"
 POECDN = "https://web.poecdn.com"
 CACHE_FILE = CONFIG_DIR / "flip_cache.json"
+AUTO_FILE = CONFIG_DIR / "flip_auto.json"
 MIN_RESCAN = 25 * 60
 FLIP_TYPES = ["Currency", "Fragment", "Essence", "Fossil", "Omen", "Thread", "DeliriumOrb", "Oil",
               "Resonator", "Tattoo", "Runegraft", "AllflameEmber", "Astrolabe", "Artifact", "DivinationCard"]
@@ -90,6 +92,51 @@ class FlipScanner:
                 self.data = json.loads(CACHE_FILE.read_text())
         except (OSError, ValueError):
             pass
+        # trạng thái tự quét: last_etag/etag_changes lưu file; next_check/message chỉ trong RAM
+        self.auto: dict = {"last_etag": None, "etag_changes": [], "next_check": 0, "message": ""}
+        try:
+            if AUTO_FILE.exists():
+                self.auto.update(json.loads(AUTO_FILE.read_text()))
+        except (OSError, ValueError):
+            pass
+
+    async def _etag(self, client: httpx.AsyncClient, league: str) -> str:
+        """ETag của overview Currency – đổi khi poe.ninja có dữ liệu mới (1 request, Cloudflare cache)."""
+        r = await self.limiter.request(client, "ninja-flip", "GET", f"{API}/overview",
+                                       params={"league": league, "type": "Currency"})
+        if r.status_code in (403, 429):
+            raise RuntimeError(f"poe.ninja chặn tạm (HTTP {r.status_code}) – thử lại sau ít phút")
+        if r.status_code != 200:
+            raise RuntimeError(f"poe.ninja HTTP {r.status_code} (overview Currency)")
+        return r.headers.get("etag") or hashlib.sha1(r.content).hexdigest()
+
+    async def probe_etag(self, league: str) -> str:
+        self.limiter.get("ninja-flip").rules = [(2, 1), (90, 60)]
+        async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, timeout=30) as c:
+            return await self._etag(c, league)
+
+    def note_etag(self, etag: str) -> None:
+        """Ghi lại lúc ETag đổi để biết poe.ninja cập nhật bao lâu một lần."""
+        if etag and etag != self.auto.get("last_etag"):
+            prev = self.auto.get("last_etag")
+            self.auto["last_etag"] = etag
+            if prev:
+                ch = self.auto.setdefault("etag_changes", [])
+                ch.append(time.time())
+                del ch[:-50]
+                if len(ch) >= 2:
+                    log.info("poe.ninja ETag đổi (cách lần trước %.0f phút)", (ch[-1] - ch[-2]) / 60)
+                else:
+                    log.info("poe.ninja ETag đổi")
+            self._save_auto()
+
+    def _save_auto(self) -> None:
+        try:
+            AUTO_FILE.parent.mkdir(parents=True, exist_ok=True)
+            AUTO_FILE.write_text(json.dumps({"last_etag": self.auto.get("last_etag"),
+                                             "etag_changes": self.auto.get("etag_changes", [])}))
+        except OSError:
+            pass
 
     async def _get(self, client: httpx.AsyncClient, path: str, **params) -> dict:
         r = await self.limiter.request(client, "ninja-flip", "GET", f"{API}/{path}", params=params)
@@ -110,6 +157,8 @@ class FlipScanner:
         self.limiter.get("ninja-flip").rules = [(2, 1), (90, 60)]
         try:
             async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, timeout=30) as c:
+                etag = await self._etag(c, league)
+                self.note_etag(etag)
                 cands = []
                 for t in types:
                     ov = await self._get(c, "overview", league=league, type=t)
@@ -151,7 +200,8 @@ class FlipScanner:
                     row = self._analyse(d, t, m, div_now, div_hist)
                     if row:
                         items.append(row)
-            self.data = {"scanned_at": time.time(), "league": league, "div_chaos": div_now, "items": items}
+            self.data = {"scanned_at": time.time(), "league": league, "div_chaos": div_now, "items": items,
+                         "etag": etag}
             CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             CACHE_FILE.write_text(json.dumps(self.data))
             self.state["message"] = f"Xong: {len(items)} món có đủ 2 cặp chaos + divine"
@@ -190,6 +240,51 @@ class FlipScanner:
             "days": days[-7:], "stable_days": same, "n_days": len(days[-7:]),
             "orders": _orders(direction, chaos_price, 1 / div_per_item, div_now),
         }
+
+
+async def auto_step(scanner: FlipScanner, cfg) -> float:
+    """
+    Một bước của vòng tự quét. Trả số giây nên chờ trước bước sau.
+    - dữ liệu mới hơn flip_auto_minutes: không làm gì;
+    - cũ hơn: hỏi ETag overview Currency (1 request); khác ETag lần quét trước → quét đầy đủ;
+      giống → chờ 5 phút hỏi lại; cũ hơn flip_auto_max_minutes thì quét luôn.
+    """
+    mins = int(getattr(cfg, "flip_auto_minutes", 0) or 0)
+    if mins <= 0 or not cfg.league:
+        scanner.auto["message"] = "Tự quét: tắt"
+        return 60
+    if scanner.state["running"]:
+        return 30
+    d = scanner.data
+    age = time.time() - d.get("scanned_at", 0) if d.get("league") == cfg.league else float("inf")
+    if age < mins * 60:
+        scanner.auto["next_check"] = time.time() + mins * 60 - age
+        scanner.auto["message"] = f"Tự quét: kiểm tra lúc {time.strftime('%H:%M', time.localtime(scanner.auto['next_check']))}"
+        return min(mins * 60 - age, 300) + 1
+    wait = scanner.can_scan(cfg.league)
+    if wait > 0:
+        return wait + 1
+    max_age = max(mins, int(getattr(cfg, "flip_auto_max_minutes", 60) or 60)) * 60
+    try:
+        etag = await scanner.probe_etag(cfg.league)
+    except Exception as e:  # noqa: BLE001
+        scanner.auto["message"] = f"Tự quét: lỗi hỏi poe.ninja ({e}) – thử lại sau 10 phút"
+        log.warning("flip auto: %s", e)
+        return 600
+    scanner.note_etag(etag)
+    if etag == d.get("etag") and age < max_age:
+        scanner.auto["next_check"] = time.time() + 300
+        scanner.auto["message"] = "Tự quét: poe.ninja chưa có dữ liệu mới, hỏi lại sau 5 phút"
+        return 300
+    why = "poe.ninja có dữ liệu mới" if etag != d.get("etag") else f"dữ liệu đã cũ {age / 60:.0f} phút"
+    scanner.auto["message"] = f"Tự quét: đang quét ({why})"
+    log.info("flip auto scan: %s", why)
+    await scanner.scan(cfg.league, cfg.flip_types, int(cfg.flip_max_items), float(cfg.flip_min_volume))
+    if scanner.state.get("error"):
+        scanner.auto["message"] = f"Tự quét: lỗi – {scanner.state['error']} (thử lại sau 10 phút)"
+        return 600
+    scanner.auto["message"] = f"Tự quét: xong lúc {time.strftime('%H:%M')}"
+    return 60
 
 
 async def run_scan(scanner: FlipScanner, league: str, types, max_items, min_volume):
